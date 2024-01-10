@@ -3,7 +3,7 @@
 
   SPDX-License-Identifier: Apache-2.0
 -->
-# zephyr_sharedram - module to enable sharing ram between applications 
+# zephyr_sharedram - module to enable sharing data between applications 
 
 This modules enables sharing information on an area of ram between consecutive
 applications (e.g. a bootloader and an application). It is a replacement for
@@ -27,10 +27,10 @@ the submanifest file (`zephyr/submanifests/example.yaml`) can be altered:
 manifest:
   projects:
     - name: zephyr_sharedram
-      url: https://github.com/Laczen/zephyr_sharedram
+      url: https://github.com/Laczen/zephyr_shared_data
       revision: main
 ```
 
 After the project has been added calling `west update` ads the module to
 the zephyr workspace. If your workspace is called `zephyr_project` tests can 
-be found under `zephyr_project/zephyr_sharedram/tests`.
+be found under `zephyr_project/zephyr_shared_data/tests`.

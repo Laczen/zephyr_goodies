@@ -1,0 +1,15 @@
+# Copyright (c) 2024 Laczen
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig ZEPHYR_SHARED_DATA
+	bool "Zephyr shared data driver"
+	help
+	  Enables support for the zephyr shared data driver.
+
+if ZEPHYR_SHARED_DATA
+
+module = ZEPHYR_SHARED_DATA
+module-str = zephyr_shared_data
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # ZEPHYR_SHARED_DATA

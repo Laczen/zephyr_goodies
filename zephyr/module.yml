@@ -1,5 +1,7 @@
-name: zephyr_sharedram
+name: zephyr_shared_data
 build:
-  cmake: zephyr
-  kconfig: zephyr/Kconfig
+  cmake: .
+  kconfig: Kconfig
+  settings:
+    dts_root: .
   

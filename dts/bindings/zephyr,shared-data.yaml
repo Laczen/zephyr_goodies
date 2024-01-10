@@ -1,0 +1,15 @@
+# Copyright (c) 2024 Laczen
+# SPDX-License-Identifier: Apache-2.0
+
+description: zephyr shared data area
+
+compatible: "zephyr,shared-data"
+
+include: base.yaml
+
+properties:
+  memory-region:
+    type: phandle
+    required: true
+    description: |
+      Memory region used to store data.
