@@ -1,0 +1,5 @@
+name: zephyr_sharedram
+build:
+  cmake: zephyr
+  kconfig: zephyr/Kconfig
+  
