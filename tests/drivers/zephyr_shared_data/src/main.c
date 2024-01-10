@@ -28,7 +28,7 @@ ZTEST_USER(shared_data_api, test_get_size)
 
 	rc = zephyr_shared_data_size(shareddatatestdevice, &size);
 
-	zassert_not_equal(rc, 0, "Get size returned invalid value");
+	zassert_equal(rc, 0, "Get size returned invalid value [%d]", rc);
 	zassert_not_equal(size, 0U, "Size value is invalid");
 }
 
@@ -39,7 +39,7 @@ ZTEST_USER(shared_data_api, test_get_set)
 
 	rc = zephyr_shared_data_size(shareddatatestdevice, &size);
 
-	zassert_not_equal(rc, 0, "Get size returned invalid value");
+	zassert_equal(rc, 0, "Get size returned invalid value [%d]", rc);
 	zassert_not_equal(size, 0U, "Size value is invalid");
 
 	uint8_t wr[size];

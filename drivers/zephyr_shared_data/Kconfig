@@ -8,6 +8,12 @@ menuconfig ZEPHYR_SHARED_DATA
 
 if ZEPHYR_SHARED_DATA
 
+config ZEPHYR_SHARED_DATA_INIT_PRIORITY
+	int "Shared data devices init priority"
+	default 40
+	help
+	  Shared data devices initialization priority,
+
 module = ZEPHYR_SHARED_DATA
 module-str = zephyr_shared_data
 source "subsys/logging/Kconfig.template.log_config"

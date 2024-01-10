@@ -12,6 +12,7 @@
 #include <zephyr/drivers/zephyr_shared_data.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/util.h>
+#include <zephyr/linker/devicetree_regions.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(zephyr_shared_data, CONFIG_ZEPHYR_SHARED_DATA_LOG_LEVEL);
@@ -25,6 +26,7 @@ static int shared_data_size(const struct device *dev, size_t *size)
 {
 	const struct shared_data_config *config = dev->config;
 
+	LOG_INF("size %d", config->size);
 	*size = config->size;
 	return 0;
 }
@@ -64,16 +66,19 @@ static const struct zephyr_shared_data_driver_api zephyr_shared_data_api = {
 #define DT_DRV_COMPAT zephyr_shared_data
 
 #define MREGION_PHANDLE(n) DT_PHANDLE_BY_IDX(DT_DRV_INST(n), memory_region, 0)
+#define MREGION_NAME(n)    LINKER_DT_NODE_REGION_NAME(MREGION_PHANDLE(n))
 
 #define ZEPHYR_SHARED_DATA_DEVICE(inst)                                         \
+	static uint8_t shared_data_##inst[DT_REG_SIZE(                          \
+		MREGION_PHANDLE(inst))] Z_GENERIC_SECTION(MREGION_NAME(inst));  \
 	static const struct shared_data_config                                  \
 		zephyr_shared_data_config_##inst = {                            \
-			.start = (void *)DT_REG_ADDR(MREGION_PHANDLE(inst)),    \
+			.start = (void *)&shared_data_##inst,                   \
 			.size = DT_REG_SIZE(MREGION_PHANDLE(inst)),             \
 	};                                                                      \
 	DEVICE_DT_INST_DEFINE(inst, NULL, NULL, NULL,                           \
 			      &zephyr_shared_data_config_##inst, POST_KERNEL,   \
-			      CONFIG_RETAINED_MEM_INIT_PRIORITY,                \
+			      CONFIG_ZEPHYR_SHARED_DATA_INIT_PRIORITY,          \
 			      &zephyr_shared_data_api);
 
 DT_INST_FOREACH_STATUS_OKAY(ZEPHYR_SHARED_DATA_DEVICE)

@@ -11,7 +11,7 @@ static inline ssize_t z_vrfy_zephyr_shared_data_size(const struct device *dev,
 						     size_t *size)
 {
 	K_OOPS(K_SYSCALL_OBJ(dev, K_OBJ_DRIVER_ZEPHYR_SHARED_DATA));
-	K_OOPS(K_SYSCALL_MEMORY_WRITE(info, sizeof(size_t)));
+	K_OOPS(K_SYSCALL_MEMORY_WRITE(size, sizeof(size_t)));
 	return z_impl_zephyr_shared_data_size(dev, size);
 }
 #include <syscalls/zephyr_shared_data_size_mrsh.c>
