@@ -34,7 +34,11 @@ static int shared_data_read(const struct device *dev, size_t off, void *data,
 {
 	const struct shared_data_config *config = dev->config;
 
-	memcpy(data, (config->start + off), len);
+	if ((config->size < len) || ((config->size - len) < off)) {
+		return -EINVAL;
+	}
+
+	memcpy(data, ((uint8_t *)config->start + off), len);
 	return 0;
 }
 
@@ -43,15 +47,21 @@ static int shared_data_prog(const struct device *dev, size_t off,
 {
 	const struct shared_data_config *config = dev->config;
 
-	memcpy((config->start + offset), buffer, size);
+	if ((config->size < len) || ((config->size - len) < off)) {
+		return -EINVAL;
+	}
+
+	memcpy(((uint8_t *)config->start + off), data, len);
 	return 0;
 }
 
-static const struct zephyr_shared_data_api zephyr_shared_data_api = {
+static const struct zephyr_shared_data_driver_api zephyr_shared_data_api = {
 	.size = shared_data_size,
 	.read = shared_data_read,
 	.prog = shared_data_prog,
 };
+
+#define DT_DRV_COMPAT zephyr_shared_data
 
 #define MREGION_PHANDLE(n) DT_PHANDLE_BY_IDX(DT_DRV_INST(n), memory_region, 0)
 

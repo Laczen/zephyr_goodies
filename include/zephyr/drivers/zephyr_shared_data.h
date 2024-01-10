@@ -32,13 +32,15 @@ extern "C" {
 
 /**
  * @brief Zephyr shared data driver API
- * 
+ *
  * API to store data in a shared data area.
  */
 __subsystem struct zephyr_shared_data_driver_api {
 	int (*size)(const struct device *dev, size_t *size);
-        int (*read)(const struct device *dev, size_t off, void *data, size_t len);
-        int (*prog)(const struct device *dev, size_t off, const void *data, size_t len);
+	int (*read)(const struct device *dev, size_t off, void *data,
+		    size_t len);
+	int (*prog)(const struct device *dev, size_t off, const void *data,
+		    size_t len);
 };
 
 /**
@@ -51,9 +53,15 @@ __subsystem struct zephyr_shared_data_driver_api {
  */
 __syscall int zephyr_shared_data_size(const struct device *dev, size_t *size);
 
-static inline int z_impl_zephyr_shared_data_size(const struct device *dev, size_t *size)
+static inline int z_impl_zephyr_shared_data_size(const struct device *dev,
+						 size_t *size)
 {
-	struct zephyr_shared_data_driver_api *api = (struct zephyr_shared_data_driver_api *)dev->api;
+	struct zephyr_shared_data_driver_api *api =
+		(struct zephyr_shared_data_driver_api *)dev->api;
+
+	if (api->size == NULL) {
+		return -ENOTSUP;
+	}
 
 	return api->size(dev, size);
 }
@@ -68,19 +76,18 @@ static inline int z_impl_zephyr_shared_data_size(const struct device *dev, size_
  *
  * @retval		0 on success else negative errno code.
  */
-__syscall int zephyr_shared_data_read(const struct device *dev, size_t off, void *data,
-				    size_t len);
+__syscall int zephyr_shared_data_read(const struct device *dev, size_t off,
+				      void *data, size_t len);
 
-static inline int z_impl_zephyr_shared_data_read(const struct device *dev, size_t off,
-					       void *data, size_t len)
+static inline int z_impl_zephyr_shared_data_read(const struct device *dev,
+						 size_t off, void *data,
+						 size_t len)
 {
-	struct zephyr_shared_data_driver_api *api = (struct zephyr_shared_data_driver_api *)dev->api;
-	size_t area_size = 0U;
+	struct zephyr_shared_data_driver_api *api =
+		(struct zephyr_shared_data_driver_api *)dev->api;
 
-	(void)api->size(dev, &area_size);
-
-	if ((area_size < len) || ((area_size - len) < off)) {
-		return -EINVAL;
+	if (api->read == NULL) {
+		return -ENOTSUP;
 	}
 
 	return api->read(dev, off, data, len);
@@ -96,19 +103,18 @@ static inline int z_impl_zephyr_shared_data_read(const struct device *dev, size_
  *
  * @retval		0 on success else negative errno code.
  */
-__syscall int zephyr_shared_data_prog(const struct device *dev, size_t off, const void *data,
-				    size_t len);
+__syscall int zephyr_shared_data_prog(const struct device *dev, size_t off,
+				      const void *data, size_t len);
 
-static inline int z_impl_zephyr_shared_data_prog(const struct device *dev, size_t off,
-					       const void *data, size_t len)
+static inline int z_impl_zephyr_shared_data_prog(const struct device *dev,
+						 size_t off, const void *data,
+						 size_t len)
 {
-	struct zephyr_shared_data_driver_api *api = (struct zephyr_shared_data_driver_api *)dev->api;
-	size_t area_size = 0U;
+	struct zephyr_shared_data_driver_api *api =
+		(struct zephyr_shared_data_driver_api *)dev->api;
 
-	(void)api->size(dev, &area_size);
-
-	if ((area_size < len) || ((area_size - len) < off)) {
-		return -EINVAL;
+	if (api->prog == NULL) {
+		return -ENOTSUP;
 	}
 
 	return api->prog(dev, off, data, len);
