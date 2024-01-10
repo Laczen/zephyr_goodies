@@ -65,15 +65,16 @@ static const struct zephyr_shared_data_driver_api zephyr_shared_data_api = {
 #define DT_DRV_COMPAT zephyr_shared_data
 
 #define MREGION_PHANDLE(n) DT_PHANDLE_BY_IDX(DT_DRV_INST(n), memory_region, 0)
+#define MREGION_SIZE(n)    DT_REG_SIZE(MREGION_PHANDLE(n))
 #define MREGION_NAME(n)    LINKER_DT_NODE_REGION_NAME(MREGION_PHANDLE(n))
+#define MREGION_SECTION(n) Z_GENERIC_SECTION(MREGION_NAME(n))
 
 #define ZEPHYR_SHARED_DATA_DEVICE(inst)                                         \
-	static uint8_t shared_data_##inst[DT_REG_SIZE(                          \
-		MREGION_PHANDLE(inst))] Z_GENERIC_SECTION(MREGION_NAME(inst));  \
+	static uint8_t zsdata_##inst[MREGION_SIZE(inst)] MREGION_SECTION(inst); \
 	static const struct shared_data_config                                  \
 		zephyr_shared_data_config_##inst = {                            \
-			.start = (void *)&shared_data_##inst,                   \
-			.size = DT_REG_SIZE(MREGION_PHANDLE(inst)),             \
+			.start = (void *)&zsdata_##inst,                        \
+			.size = MREGION_SIZE(inst),                             \
 	};                                                                      \
 	DEVICE_DT_INST_DEFINE(inst, NULL, NULL, NULL,                           \
 			      &zephyr_shared_data_config_##inst, POST_KERNEL,   \
