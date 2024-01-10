@@ -26,7 +26,6 @@ static int shared_data_size(const struct device *dev, size_t *size)
 {
 	const struct shared_data_config *config = dev->config;
 
-	LOG_INF("size %d", config->size);
 	*size = config->size;
 	return 0;
 }
