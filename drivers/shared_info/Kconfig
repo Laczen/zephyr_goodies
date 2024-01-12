@@ -1,0 +1,21 @@
+# Copyright (c) 2024 Laczen
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig SHARED_INFO
+	bool "Shared info driver"
+	help
+	  Enables support for the shared info driver.
+
+if SHARED_INFO
+
+config SHARED_INFO_INIT_PRIORITY
+	int "Shared info devices init priority"
+	default 40
+	help
+	  Shared info devices initialization priority,
+
+module = SHARED_INFO
+module-str = shared_info
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # SHARED_INFO

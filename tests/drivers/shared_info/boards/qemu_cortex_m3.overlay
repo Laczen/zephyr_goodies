@@ -9,18 +9,18 @@
 	sram_2000FF80: sram@2000FF80 {
 		compatible = "zephyr,memory-region", "mmio-sram";
 		reg = <0x2000FF80 0x80>;
-                zephyr,memory-region = "Retention";
+                zephyr,memory-region = "SHARED_INFO";
                 status = "okay";
         };
 
-        shared_data: shared_data {
-                compatible = "zephyr,shared-data";
+        shared_info: shared_info {
+                compatible = "zephyr,shared-info";
                 memory-region = <&sram_2000FF80>;
                 status = "okay";
         };
 
         aliases {
-                shareddatatestdevice = &shared_data;
+                sharedinfotestdevice = &shared_info;
         };
 
 };

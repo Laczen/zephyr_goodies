@@ -7,37 +7,37 @@
 #include <zephyr/kernel.h>
 #include <zephyr/ztest.h>
 #include <zephyr/devicetree.h>
-#include <zephyr/drivers/zephyr_shared_data.h>
+#include <zephyr/drivers/shared_info.h>
 
-const static struct device *shareddatatestdevice =
-	DEVICE_DT_GET(DT_ALIAS(shareddatatestdevice));
+const static struct device *sharedinfotestdevice =
+	DEVICE_DT_GET(DT_ALIAS(sharedinfotestdevice));
 
-static void *shared_data_api_setup(void)
+static void *shared_info_api_setup(void)
 {
 	if (IS_ENABLED(CONFIG_USERSPACE)) {
-		k_object_access_grant(shareddatatestdevice, k_current_get());
+		k_object_access_grant(sharedinfotestdevice, k_current_get());
 	}
 
 	return NULL;
 }
 
-ZTEST_USER(shared_data_api, test_get_size)
+ZTEST_USER(shared_info_api, test_get_size)
 {
 	int rc;
 	size_t size = 0U;
 
-	rc = zephyr_shared_data_size(shareddatatestdevice, &size);
+	rc = shared_info_size(sharedinfotestdevice, &size);
 
 	zassert_equal(rc, 0, "Get size returned invalid value [%d]", rc);
 	zassert_not_equal(size, 0U, "Size value is invalid");
 }
 
-ZTEST_USER(shared_data_api, test_get_set)
+ZTEST_USER(shared_info_api, test_get_set)
 {
 	int rc;
 	size_t size = 0U;
 
-	rc = zephyr_shared_data_size(shareddatatestdevice, &size);
+	rc = shared_info_size(sharedinfotestdevice, &size);
 
 	zassert_equal(rc, 0, "Get size returned invalid value [%d]", rc);
 	zassert_not_equal(size, 0U, "Size value is invalid");
@@ -48,13 +48,13 @@ ZTEST_USER(shared_data_api, test_get_set)
 	memset(wr, 'T', sizeof(wr));
 	memset(rd, 0, sizeof(rd));
 
-	rc = zephyr_shared_data_prog(shareddatatestdevice, 0U, wr, sizeof(wr));
+	rc = shared_info_prog(sharedinfotestdevice, 0U, wr, sizeof(wr));
 	zassert_equal(rc, 0, "prog returned [%d]", rc);
 
-	rc = zephyr_shared_data_read(shareddatatestdevice, 0U, rd, sizeof(rd));
+	rc = shared_info_read(sharedinfotestdevice, 0U, rd, sizeof(rd));
 	zassert_equal(rc, 0, "read returned [%d]", rc);
 
 	zassert_equal(memcmp(rd, wr, sizeof(wr)), 0, "data mismatch");
 }
 
-ZTEST_SUITE(shared_data_api, NULL, shared_data_api_setup, NULL, NULL, NULL);
+ZTEST_SUITE(shared_info_api, NULL, shared_info_api_setup, NULL, NULL, NULL);

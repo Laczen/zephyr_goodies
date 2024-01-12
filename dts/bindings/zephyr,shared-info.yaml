@@ -1,9 +1,9 @@
 # Copyright (c) 2024 Laczen
 # SPDX-License-Identifier: Apache-2.0
 
-description: zephyr shared data area
+description: zephyr shared info area
 
-compatible: "zephyr,shared-data"
+compatible: "zephyr,shared-info"
 
 include: base.yaml
 
