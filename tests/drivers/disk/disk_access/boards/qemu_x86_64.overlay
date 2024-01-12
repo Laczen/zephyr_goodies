@@ -1,0 +1,39 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
+#include <zephyr/dt-bindings/pcie/pcie.h>
+
+/delete-node/ &eeprom0;
+
+/ {
+	pcie0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "intel,pcie";
+		ranges;
+
+		nvme0: nvme0 {
+			compatible = "nvme-controller";
+
+			vendor-id = <0x1B36>;
+			device-id = <0x0010>;
+
+			status = "okay";
+		};
+	};
+
+	eeprom0: eeprom0 {
+		status = "okay";
+		compatible = "zephyr,sim-eeprom";
+		size = <DT_SIZE_K(24)>;
+	};
+
+
+	eepromdisk0 {
+		compatible = "zephyr,eeprom-disk";
+		disk-name = "EEPROM";
+		sector-size = <128>;
+		sector-count = <192>;
+		eeprom = <&eeprom0>;
+		eeprom-offset = <0>;
+	};
+};

@@ -1,0 +1,39 @@
+# Copyright (c) 2024 Laczen
+# SPDX-License-Identifier: Apache-2.0
+
+description: EEPROM disk
+
+compatible: "zephyr,eeprom-disk"
+
+include: base.yaml
+
+properties:
+  disk-name:
+    type: string
+    required: true
+    description: |
+      Disk name.
+
+  sector-size:
+    type: int
+    required: true
+    enum: [128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]
+    description: |
+      Disk sector size in bytes.
+
+  sector-count:
+    type: int
+    required: true
+    description: |
+      Number of sectors.
+
+  eeprom:
+    type: phandle
+    required: true
+    description: |
+      phandle to the eeprom device that is used as disk.
+
+  eeprom-offset:
+    type: int
+    description: |
+      optional start offset on the eeprom.

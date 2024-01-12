@@ -3,6 +3,7 @@
 
 menuconfig SHARED_INFO
 	bool "Shared info driver"
+	default n
 	help
 	  Enables support for the shared info driver.
 

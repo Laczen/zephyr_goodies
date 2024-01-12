@@ -1,0 +1,23 @@
+# Copyright (c) 2024 Laczen
+# SPDX-License-Identifier: Apache-2.0
+
+config DISK_DRIVER_EEPROM
+	bool "EEPROM Disk"
+	default y if DT_HAS_ZEPHYR_EEPROM_DISK_ENABLED
+  select EEPROM
+	help
+	  Emulate storage disk on EEPROM.
+
+if DISK_DRIVER_EEPROM
+
+config DISK_DRIVER_EEPROM_INIT_PRIORITY
+	int "Disk driver eeprom devices init priority"
+	default 60
+	help
+	  Disk driver eeprom devices initialization priority,
+
+module = EEPROMDISK
+module-str = eepromdisk
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # DISK_DRIVER_EEPROM
