@@ -3,11 +3,14 @@
 
   SPDX-License-Identifier: Apache-2.0
 -->
-# zephyr_sharedram - module to enable sharing data between applications 
+# zephyr_goodies - module that combines multiple out of tree solutions for zephyr 
 
-This modules enables sharing information on an area of ram between consecutive
-applications (e.g. a bootloader and an application). It is a replacement for
-the retained_mem driver in zephyr. To enable the module the west manifest or
+This modules provides multiple out of tree solutions for zephyr:
+
+1. shared_info: a replacement for the zephyr retained_mem driver,
+2. eeprom_disk: a driver for using eeprom as a disk.
+
+To enable the module the west manifest or
 the submanifest file (`zephyr/submanifests/example.yaml`) can be altered:
 
 ```
@@ -26,11 +29,12 @@ the submanifest file (`zephyr/submanifests/example.yaml`) can be altered:
 
 manifest:
   projects:
-    - name: zephyr_sharedram
-      url: https://github.com/Laczen/zephyr_shared_data
+    - name: zephyr_goodies
+      url: https://github.com/Laczen/zephyr_goodies
       revision: main
 ```
 
 After the project has been added calling `west update` ads the module to
-the zephyr workspace. If your workspace is called `zephyr_project` tests can 
-be found under `zephyr_project/zephyr_shared_data/tests`.
+the zephyr workspace. If your workspace is called `zephyr_project` the module
+can be found under `zephyr_project/zephyr_goodies`. The module uses the same
+folder layout as zephyr.
