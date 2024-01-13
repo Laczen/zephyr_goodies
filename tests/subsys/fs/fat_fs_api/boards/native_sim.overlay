@@ -1,0 +1,31 @@
+/*
+ * Copyright (c) 2022 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/delete-node/ &eeprom0;
+
+/ {
+	eeprom0: eeprom {
+		status = "okay";
+		compatible = "zephyr,sim-eeprom";
+		/* There seems to be some internal fatfs minimum for the size
+		 * of the disk, anything smaller than 64kB does not work
+		 */
+		size = <DT_SIZE_K(64)>;
+	};
+
+	test_disk: storage_disk {
+		compatible = "zephyr,eeprom-disk";
+		/* Only a limited number of names are supported by zephyr fatfs
+		 * "RAM","NAND","CF","SD","SD2","USB","USB2","USB3"
+		 */
+		disk-name = "RAM";
+		sector-size = <512>;
+		eeprom = <&eeprom0>;
+		/* eeprom-offset = <0>; optional offset on eeprom */
+		/* disk-size = <DT_SIZE_K(16)>; optional disk size */
+	};
+
+};

@@ -106,10 +106,9 @@ static int disk_eeprom_access_ioctl(struct disk_info *disk, uint8_t cmd,
 
 static int disk_eeprom_init(const struct device *dev)
 {
-	struct disk_info *info = dev->data;
+	struct disk_info *info = (struct disk_info *)dev->data;
 
 	info->dev = dev;
-
 	return disk_access_register(info);
 }
 
