@@ -32,8 +32,8 @@
 		compatible = "zephyr,eeprom-disk";
 		disk-name = "EEPROM";
 		sector-size = <128>;
-		sector-count = <192>;
 		eeprom = <&eeprom0>;
-		eeprom-offset = <0>;
+		/* eeprom-offset = <0>; optional offset on eeprom */
+		/* disk-size = <DT_SIZE_K(16)>; optional disk size */
 	};
 };

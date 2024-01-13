@@ -17,15 +17,9 @@ properties:
   sector-size:
     type: int
     required: true
-    enum: [128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]
+    enum: [16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]
     description: |
       Disk sector size in bytes.
-
-  sector-count:
-    type: int
-    required: true
-    description: |
-      Number of sectors.
 
   eeprom:
     type: phandle
@@ -33,7 +27,12 @@ properties:
     description: |
       phandle to the eeprom device that is used as disk.
 
+  disk-size:
+    type: int
+    description: |
+      Disk size in bytes.
+
   eeprom-offset:
     type: int
     description: |
-      optional start offset on the eeprom.
+      optional eeprom start offset in bytes.
