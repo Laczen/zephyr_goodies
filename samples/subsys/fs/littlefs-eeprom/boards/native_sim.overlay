@@ -1,0 +1,25 @@
+/*
+ * Copyright (c) 2022 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/delete-node/ &eeprom0;
+
+/ {
+	eeprom0: eeprom {
+		status = "okay";
+		compatible = "zephyr,sim-eeprom";
+		size = <DT_SIZE_K(64)>;
+	};
+
+	test_disk: storage_disk {
+		compatible = "zephyr,eeprom-disk";
+		disk-name = "EEPROM";
+		sector-size = <256>;
+		eeprom = <&eeprom0>;
+		/* eeprom-offset = <0>; optional offset on eeprom */
+		/* disk-size = <DT_SIZE_K(16)>; optional disk size */
+	};
+
+};
