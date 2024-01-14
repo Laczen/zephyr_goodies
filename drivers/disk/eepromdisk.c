@@ -15,7 +15,7 @@
 #include <zephyr/drivers/eeprom.h>
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(eepromdisk, CONFIG_EEPROMDISK_LOG_LEVEL);
+LOG_MODULE_REGISTER(eepromdisk, CONFIG_DISK_DRIVER_EEPROM_LOG_LEVEL);
 
 struct eeprom_disk_config {
 	const size_t sector_size;
@@ -75,9 +75,12 @@ static int disk_eeprom_access_write(struct disk_info *disk, const uint8_t *buff,
 		return -EIO;
 	}
 
-	return eeprom_write(config->eeprom_dev,
-			    config->eeprom_off + lba_to_address(dev, sector),
-			    buff, count * config->sector_size);
+	int rc = eeprom_write(config->eeprom_dev,
+			      config->eeprom_off + lba_to_address(dev, sector),
+			      buff, count * config->sector_size);
+	LOG_DBG("Write %d sectors to %x [%d]", count,
+		lba_to_address(dev, sector), rc);
+	return rc;
 }
 
 static int disk_eeprom_access_ioctl(struct disk_info *disk, uint8_t cmd,

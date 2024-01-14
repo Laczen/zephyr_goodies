@@ -16,7 +16,7 @@ config DISK_DRIVER_EEPROM_INIT_PRIORITY
 	help
 	  Disk driver eeprom devices initialization priority,
 
-module = EEPROMDISK
+module = DISK_DRIVER_EEPROM
 module-str = eepromdisk
 source "subsys/logging/Kconfig.template.log_config"
 
