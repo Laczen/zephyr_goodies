@@ -123,15 +123,15 @@ static const struct disk_operations eeprom_disk_ops = {
 #define DT_DRV_COMPAT zephyr_eeprom_disk
 
 #define EEPROM_DEVICE(n)     DEVICE_DT_GET(DT_INST_PHANDLE(n, eeprom))
-#define EEPROM_SIZE(n)       DT_INST_PROP_BY_PHANDLE(n, eeprom, size)
 #define EEPROM_OFFSET(n)     DT_INST_PROP_OR(n, eeprom_offset, 0)
+#define EEPROM_SIZE(n)       DT_INST_PROP_BY_PHANDLE(n, eeprom, size)
+#define EEPROM_ASIZE(n)      EEPROM_SIZE(n) - EEPROM_OFFSET(n)
 #define EEPROM_RO(n)         DT_INST_PROP_BY_PHANDLE(n, eeprom, read_only)
-#define EEPROM_DISK_SIZE(n)  DT_INST_PROP_OR(n, disk_size, (EEPROM_SIZE(n)))
+#define EEPROM_DISK_SIZE(n)  DT_INST_PROP_OR(n, disk_size, (EEPROM_ASIZE(n)))
 #define EEPROM_DISK_SSIZE(n) DT_INST_PROP(n, sector_size)
 #define EEPROM_DISK_SCNT(n)  EEPROM_DISK_SIZE(n) / EEPROM_DISK_SSIZE(n)
 
-#define EEPROM_DISK_SIZE_OK(n)                                                  \
-	((EEPROM_SIZE(n) - EEPROM_OFFSET(n)) >= EEPROM_DISK_SIZE(n))
+#define EEPROM_DISK_SIZE_OK(n)  (EEPROM_ASIZE(n) >= EEPROM_DISK_SIZE(n))
 #define EEPROM_DISK_ALIGN_OK(n) (EEPROM_DISK_SIZE(n) % EEPROM_DISK_SSIZE(n) == 0)
 
 #define EEPROMDISK_DEVICE_CONFIG_DEFINE(n)                                      \
