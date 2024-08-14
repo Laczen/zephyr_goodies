@@ -8,7 +8,8 @@
 This modules provides multiple out of tree solutions for zephyr:
 
 1. shared_info: a replacement for the zephyr retained_mem driver,
-2. eeprom_disk: a driver for using eeprom as a disk.
+2. eeprom_disk: a driver for using eeprom as a disk,
+3. storage: a subsystem for working with storage,
 
 To enable the module the west manifest or
 the submanifest file (`zephyr/submanifests/example.yaml`) can be altered:
