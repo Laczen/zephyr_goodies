@@ -1,0 +1,37 @@
+# Copyright (c) 2024 Laczen
+# SPDX-License-Identifier: Apache-2.0
+
+menuconfig STORAGE_AREA
+	bool "Storage area subsystem"
+	help
+	  Enables support for the storage area subsystem.
+
+if STORAGE_AREA
+
+config STORAGE_AREA_FLASH
+	bool "Storage area on flash"
+	select FLASH
+	help
+	  Enable support for storage area on flash.
+
+config STORAGE_AREA_EEPROM
+	bool "Storage area on eeprom"
+	help
+	  Enable support for storage area on eeprom.
+
+config STORAGE_AREA_DISK
+	bool "Storage area on disk"
+	help
+	  Enable support for storage area on disk.
+
+config STORAGE_AREA_VERIFY
+	bool "Storage area verification"
+	select FLASH_PAGE_LAYOUT if STORAGE_AREA_FLASH
+	help
+	  Enables support for storage area verification.
+
+module = STORAGE_AREA
+module-str = shared_info
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # STORAGE_AREA
