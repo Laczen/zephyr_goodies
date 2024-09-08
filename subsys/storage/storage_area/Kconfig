@@ -24,12 +24,6 @@ config STORAGE_AREA_DISK
 	help
 	  Enable support for storage area on disk.
 
-config STORAGE_AREA_VERIFY
-	bool "Storage area verification"
-	select FLASH_PAGE_LAYOUT if STORAGE_AREA_FLASH
-	help
-	  Enables support for storage area verification.
-
 module = STORAGE_AREA
 module-str = shared_info
 source "subsys/logging/Kconfig.template.log_config"

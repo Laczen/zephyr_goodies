@@ -6,7 +6,7 @@
 
 /**
  * @file
- * @brief Public API for storage area subsystem
+ * @brief Public API for storage area flash subsystem
  */
 
 #ifndef ZEPHYR_INCLUDE_STORAGE_STORAGE_AREA_FLASH_H_
@@ -14,7 +14,7 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
-#include <zephyr/storage/storage_area.h>
+#include <zephyr/storage/storage_area/storage_area.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,6 +33,8 @@ struct storage_area_flash {
 	const struct device *dev;
 	const size_t start;
 	const size_t size;
+	const size_t write_size;
+	const size_t erase_size;
 	const size_t xip_address;
 };
 
@@ -42,13 +44,13 @@ extern const struct storage_area_api storage_area_flash_api;
 	{									\
 		.area = {							\
 			.api = &storage_area_flash_api,				\
-			.write_size = _ws,					\
-			.erase_size = _es,					\
 			.props = _props,					\
 		},								\
 		.dev = _dev,							\
 		.start = _start,						\
 		.size = _size,							\
+		.write_size = _ws,						\
+		.erase_size = _es,						\
 		.xip_address = _xip,						\
 	}
 

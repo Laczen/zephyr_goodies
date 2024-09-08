@@ -27,8 +27,8 @@ end:
 	return rc;
 }
 
-int storage_area_read(const struct storage_area *area, size_t start,
-		      void *data, size_t len)
+int storage_area_readblocks(const struct storage_area *area, size_t start,
+			    const struct storage_area_db *db, size_t bcnt)
 {
 	int rc;
 
@@ -37,18 +37,30 @@ int storage_area_read(const struct storage_area *area, size_t start,
 		goto end;
 	}
 	
-	if (area->api->read == NULL) {
+	if (area->api->readblocks == NULL) {
 		rc = -ENOTSUP;
 		goto end;
 	}
 
-	rc = area->api->read(area, start, data, len);
+	rc = area->api->readblocks(area, start, db, bcnt);
 end:
 	return rc;
+
 }
 
-int storage_area_prog(const struct storage_area *area, size_t start,
-		      const void *data, size_t len)
+int storage_area_read(const struct storage_area *area, size_t start,
+		      void *data, size_t len)
+{
+	const struct storage_area_db db = {
+		.data = data,
+		.len = len,
+	};
+
+	return storage_area_readblocks(area, start, &db, 1);
+}
+
+int storage_area_progblocks(const struct storage_area *area, size_t start,
+			    const struct storage_area_db *db, size_t bcnt)
 {
 	int rc;
 
@@ -62,39 +74,34 @@ int storage_area_prog(const struct storage_area *area, size_t start,
 		goto end;
 	}
 
-	if (area->api->prog == NULL) {
+	if (area->api->progblocks == NULL) {
 		rc = -ENOTSUP;
 		goto end;
 	}
 
-	if (((start % area->write_size) != 0U) ||
-	    ((len % area->write_size) != 0U)) {
-		rc = -EINVAL;
-		goto end;
-	}
-
-	rc = area->api->prog(area, start, data, len);
+	rc = area->api->progblocks(area, start, db, bcnt);
 end:
 	return rc;
 }
 
-int storage_area_verify(const struct storage_area *area)
+int storage_area_prog(const struct storage_area *area, size_t start,
+		      const void *data, size_t len)
 {
-	int rc = 0;
+	const struct storage_area_db db = {
+		.data = (void *)data,
+		.len = len,
+	};
 
-	if ((area == NULL) || (area->api == NULL)) {
-		rc = -EINVAL;
-		goto end;
+	return storage_area_progblocks(area, start, &db, 1);
+}
+
+size_t storage_area_dbsize(const struct storage_area_db *db, size_t bcnt)
+{
+	size_t rv = 0U;
+
+	for (size_t i = 0U; i < bcnt; i++) {
+		rv += db[i].len;
 	}
 
-	if (IS_ENABLED(CONFIG_STORAGE_AREA_VERIFY)) {
-		if (area->api->verify == NULL) {
-			rc = -ENOTSUP;
-			goto end;
-		}
-
-		rc = area->api->verify(area);
-	}
-end:
-	return rc;
+	return rv;
 }

@@ -10,62 +10,8 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(sa_flash, CONFIG_STORAGE_AREA_LOG_LEVEL);
 
-#if defined(CONFIG_STORAGE_AREA_VERIFY)
-static int storage_area_flash_verify(const struct storage_area *area)
-{
-	const struct storage_area_flash *flash =
-		CONTAINER_OF(area, struct storage_area_flash, area);
-	const struct device *dev = flash->dev;
-	int rc = -ENODEV;
-
-	if (!device_is_ready(dev)) {
-		goto end;
-	}
-
-	const struct flash_parameters *parameters = flash_get_parameters(dev);
-	struct flash_pages_info info;
-	off_t doff = flash->start;
-	
-	rc = -EINVAL;
-	if (parameters == NULL) {
-		LOG_ERR("Unable to get flash parameters");
-		goto end;
-	}
-
-	if ((area->write_size % parameters->write_block_size) != 0U) {
-		LOG_ERR("Write size definition error");
-		goto end;
-	}
-
-	if ((parameters->erase_value == 0xff) &&
-	    (STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_ZEROERASE))) {
-		LOG_ERR("Erase value definition error");
-		goto end;
-	}
-
-	while (doff < (flash->start + flash->size)) {
-		rc = flash_get_page_info_by_offs(dev, doff, &info);
-		if (rc !=0) {
-			LOG_ERR("Unable to get page info");
-			goto end;
-		}
-
-		if ((area->erase_size % info.size) != 0) {
-			LOG_ERR("Erase size definition error");
-			goto end;
-		}
-
-		doff += area->erase_size;
-	}
-
-	rc = 0;
-end:
-	return rc;
-}
-#endif /* CONFIG_STORAGE_AREA_VERIFY */
-
-static bool storage_area_flash_range_valid(
-	const struct storage_area_flash *flash, size_t start, size_t len)
+static bool sa_flash_range_valid(const struct storage_area_flash *flash,
+				 size_t start, size_t len)
 {
 	if ((flash->size < len) || ((flash->size - len) < start)) {
 		return false;
@@ -74,9 +20,8 @@ static bool storage_area_flash_range_valid(
 	return true;
 }
 
-static int storage_area_flash_ioctl(const struct storage_area *area,
-				    enum storage_area_ioctl_cmd cmd,
-				    void *data)
+static int sa_flash_ioctl(const struct storage_area *area,
+			  enum storage_area_ioctl_cmd cmd, void *data)
 {
 	const struct storage_area_flash *flash =
 		CONTAINER_OF(area, struct storage_area_flash, area);
@@ -90,6 +35,42 @@ static int storage_area_flash_ioctl(const struct storage_area *area,
 
 	rc = -ENOTSUP;
 	switch(cmd) {
+	case SA_IOCTL_SIZE:
+		size_t *size = (size_t *)data;
+
+		if (size == NULL) {
+			rc = -EINVAL;
+			break;
+		}
+
+		*size = flash->size;
+		rc = 0;
+		break;
+
+	case SA_IOCTL_WRITESIZE:
+		size_t *write_size = (size_t *)data;
+
+		if (write_size == NULL) {
+			rc = -EINVAL;
+			break;
+		}
+
+		*write_size = flash->write_size;
+		rc = 0;
+		break;
+
+	case SA_IOCTL_ERASESIZE:
+		size_t *erase_size = (size_t *)data;
+
+		if (erase_size == NULL) {
+			rc = -EINVAL;
+			break;
+		}
+
+		*erase_size = flash->erase_size;
+		rc = 0;
+		break;
+
 	case SA_IOCTL_WRITEPREPARE:
 		if (STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_OVRWRITE)) {
 			rc = 0;
@@ -110,10 +91,10 @@ static int storage_area_flash_ioctl(const struct storage_area *area,
 			break;
 		}
 		
-		const size_t start = ctx->start * area->erase_size;
-		const size_t len = ctx->len * area->erase_size;
+		const size_t start = ctx->start * flash->erase_size;
+		const size_t len = ctx->len * flash->erase_size;
 
-		if (!storage_area_flash_range_valid(flash, start, len)) {
+		if (!sa_flash_range_valid(flash, start, len)) {
 			rc = -EINVAL;
 			break;
 		}
@@ -141,12 +122,13 @@ end:
 	return rc;
 }
 
-static int storage_area_flash_read(const struct storage_area *area,
-				   size_t start, void *data, size_t len)
+static int sa_flash_readblocks(const struct storage_area *area, size_t start,
+			       const struct storage_area_db *db, size_t bcnt)
 {
 	const struct storage_area_flash *flash =
 		CONTAINER_OF(area, struct storage_area_flash, area);
 	const struct device *dev = flash->dev;
+	const size_t tlen = storage_area_dbsize(db, bcnt);
 	int rc;
 
 	if (!device_is_ready(dev)) {
@@ -154,22 +136,37 @@ static int storage_area_flash_read(const struct storage_area *area,
 		goto end;
 	}
 
-	if (!storage_area_flash_range_valid(flash, start, len)) {
+	if (!sa_flash_range_valid(flash, start, tlen)) {
 		rc = -EINVAL;
 		goto end;
 	}
 
-	rc = flash_read(dev, flash->start + start, data, len);
+	start += flash->start;
+	for (size_t i = 0U; i < bcnt; i++) {
+		size_t len = db[i].len;
+
+		rc = flash_read(dev, start, db[i].data, len);
+		if (rc != 0) {
+			break;
+		}
+
+		start += len;
+	}
+
 end:
 	return rc;
 }
 
-static int storage_area_flash_prog(const struct storage_area *area,
-				   size_t start, const void *data, size_t len)
+static int sa_flash_progblocks(const struct storage_area *area, size_t start,
+			       const struct storage_area_db *db, size_t bcnt)
 {
 	const struct storage_area_flash *flash =
 		CONTAINER_OF(area, struct storage_area_flash, area);
 	const struct device *dev = flash->dev;
+	const size_t align = flash->write_size;
+	const size_t tlen = storage_area_dbsize(db, bcnt);
+	uint8_t buf[align];
+	size_t bpos = 0U;
 	int rc;
 
 	if (!device_is_ready(dev)) {
@@ -177,26 +174,61 @@ static int storage_area_flash_prog(const struct storage_area *area,
 		goto end;
 	}
 
-	if (STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_READONLY)) {
-		rc = -EROFS;
-		goto end;
-	}
-
-	if (!storage_area_flash_range_valid(flash, start, len)) {
+	if (((tlen % align) != 0U) || 
+	    (!sa_flash_range_valid(flash, start, tlen))) {
 		rc = -EINVAL;
 		goto end;
 	}
 	
-	rc = flash_write(dev, flash->start + start, data, len);
+	start += flash->start;
+	for (size_t i = 0U; i < bcnt; i++) {
+		uint8_t *data8 = (uint8_t *)db[i].data;
+		size_t len = db[i].len;
+
+		if (bpos != 0U) {
+			size_t cplen = MIN(len, align - bpos);
+
+			memcpy(buf + bpos, data8, cplen);
+			bpos += cplen;
+			len -= cplen;
+			data8 += cplen;
+
+			if (bpos == align) {
+				rc = flash_write(dev, start, buf, align);
+				if (rc != 0) {
+					break;
+				}
+
+				start += align;
+				bpos = 0U;
+			}
+		}
+
+		if (len >= align) {
+			size_t wrlen = len & ~(align - 1);
+
+			rc = flash_write(dev, start, data8, wrlen);
+			if (rc != 0) {
+				break;
+			}
+
+			len -= wrlen;
+			data8 += wrlen;
+			start += wrlen;
+		}
+
+		if (len > 0U) {
+			memcpy(buf, data8, len);
+			bpos = len;
+		}
+	}
+
 end:
 	return rc;
 }
 
 const struct storage_area_api storage_area_flash_api = {
-	.read = storage_area_flash_read,
-	.prog = storage_area_flash_prog,
-	.ioctl = storage_area_flash_ioctl,
-#if defined (CONFIG_STORAGE_AREA_VERIFY)
-	.verify = storage_area_flash_verify,
-#endif
+	.readblocks = sa_flash_readblocks,
+	.progblocks = sa_flash_progblocks,
+	.ioctl = sa_flash_ioctl,
 };

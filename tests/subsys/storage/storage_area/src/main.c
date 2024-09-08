@@ -10,19 +10,19 @@
 #include <zephyr/kernel.h>
 #include <zephyr/ztest.h>
 #include <zephyr/devicetree.h>
-#include <zephyr/storage/flash_map.h>
-#include <zephyr/storage/storage_area_flash.h>
+#include <zephyr/storage/storage_area/storage_area_flash.h>
+#include <zephyr/storage/storage_area/storage_area_eeprom.h>
 
-#define TEST_AREA	storage_partition
-#define TEST_AREA_OFFSET	FIXED_PARTITION_OFFSET(TEST_AREA)
-#define TEST_AREA_SIZE		FIXED_PARTITION_SIZE(TEST_AREA)
-#define TEST_AREA_MAX		(TEST_AREA_OFFSET + TEST_AREA_SIZE)
-#define TEST_AREA_DEVICE	FIXED_PARTITION_DEVICE(TEST_AREA)
-#define TEST_AREA_XIP		TEST_AREA_OFFSET + 				\
-	DT_REG_ADDR(DT_MTD_FROM_FIXED_PARTITION(DT_NODELABEL(TEST_AREA)))
+#define FLASH_AREA_NODE		DT_NODELABEL(storage_partition)
+#define FLASH_AREA_OFFSET	DT_REG_ADDR(FLASH_AREA_NODE)
+#define FLASH_AREA_SIZE		DT_REG_SIZE(FLASH_AREA_NODE)
+#define FLASH_AREA_DEVICE							\
+	DEVICE_DT_GET(DT_MTD_FROM_FIXED_PARTITION(FLASH_AREA_NODE))
+#define FLASH_AREA_XIP		FLASH_AREA_OFFSET + 				\
+	DT_REG_ADDR(DT_MTD_FROM_FIXED_PARTITION(FLASH_AREA_NODE))
 
 const static struct storage_area_flash flash_area = flash_storage_area(
-	TEST_AREA_DEVICE, TEST_AREA_OFFSET, TEST_AREA_SIZE, TEST_AREA_XIP, 4,
+	FLASH_AREA_DEVICE, FLASH_AREA_OFFSET, FLASH_AREA_SIZE, FLASH_AREA_XIP, 4,
 	4096, 0);
 const static struct storage_area *area = &flash_area.area;
 
@@ -34,7 +34,7 @@ static void *storage_area_api_setup(void)
 ZTEST_USER(storage_area_api, test_read_write)
 {
 	int rc;
-	size_t size = STORAGE_AREA_WRITESIZE(area);
+	size_t size = 4;
 
 	zassert_not_equal(size, 0U, "Size value is invalid");
 
