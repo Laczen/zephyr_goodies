@@ -55,12 +55,7 @@ struct storage_area;
 
 struct storage_area_erase_ctx {
 	size_t start;	/* first block to erase */
-	size_t len;	/* number of blocks to erase */
-};
-
-struct storage_area_db { /* storage area data block */
-	void *data;	/* pointer to data */
-	size_t len;	/* data size */
+	size_t count;	/* number of blocks to erase */
 };
 
 enum storage_area_properties_mask {
@@ -72,9 +67,6 @@ enum storage_area_properties_mask {
 
 enum storage_area_ioctl_cmd {
 	SA_IOCTL_NONE,
-	SA_IOCTL_SIZE,		/* retrieve the storage area size */
-	SA_IOCTL_WRITESIZE,	/* retrieve the storage area write block size */
-	SA_IOCTL_ERASESIZE,	/* retrieve the storage area erase block size */
 	SA_IOCTL_WRITEPREPARE,	/* prepare erase region for writing */
 	SA_IOCTL_ERASE,		/* erase region */
 	SA_IOCTL_XIPADDRESS,	/* retrieve the storage area xip address */
@@ -86,10 +78,10 @@ enum storage_area_ioctl_cmd {
  * API to access storage area.
  */
 struct storage_area_api {
-	int (*readblocks)(const struct storage_area *area, size_t start,
-			  const struct storage_area_db *db, size_t bcnt);
-	int (*progblocks)(const struct storage_area *area, size_t start,
-			  const struct storage_area_db *db, size_t bcnt);
+	int (*read)(const struct storage_area *area, size_t start, void *data,
+		    size_t len);
+	int (*prog)(const struct storage_area *area, size_t start,
+		    const void *data, size_t len);
 	int (*ioctl)(const struct storage_area *area,
 	             enum storage_area_ioctl_cmd cmd, void *data);
 };
@@ -99,13 +91,21 @@ struct storage_area_api {
  */
 struct storage_area {
 	const struct storage_area_api *api;
-	size_t props;		/* bitfield of storage area properties */
+	size_t write_size;
+	size_t write_blocks;
+	size_t erase_size;
+	uint32_t props;		/* bitfield of storage area properties */
 };
 
 /**
  * @brief Storage_area macros
  */
 #define STORAGE_AREA_HAS_PROPERTY(area, prop) ((area->props & prop) == prop)
+#define STORAGE_AREA_WRITESIZE(area) area->write_size
+#define STORAGE_AREA_ERASESIZE(area) area->erase_size
+#define STORAGE_AREA_SIZE(area) (area->write_size * area->write_blocks)
+#define STORAGE_AREA_OVRWRITE(area)						\
+	STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_OVRWRITE)
 #define STORAGE_AREA_ERASEVALUE(area)						\
 	STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_ZEROERASE) ? 0x00 : 0xff
 
@@ -122,19 +122,6 @@ int storage_area_ioctl(const struct storage_area *area,
 		       enum storage_area_ioctl_cmd cmd, void *data);
 
 /**
- * @brief	Read storage area blocks.
- *
- * @param area	storage area.
- * @param start	start in storage area (byte).
- * @param db	data blocks for read.
- * @param bcnt	data block count.
- *
- * @retval	0 on success else negative errno code.
- */
-int storage_area_readblocks(const struct storage_area *area, size_t start,
-			    const struct storage_area_db *db, size_t bcnt);
-
-/**
  * @brief	Read storage area.
  *
  * @param area	storage area.
@@ -146,19 +133,6 @@ int storage_area_readblocks(const struct storage_area *area, size_t start,
  */
 int storage_area_read(const struct storage_area *area, size_t start,
 		      void *data, size_t len);
-
-/**
- * @brief	Program storage area blocks.
- *
- * @param area	storage area.
- * @param start	start in storage area (byte).
- * @param db	data blocks for program.
- * @param bcnt	data block count.
- *
- * @retval	0 on success else negative errno code.
- */
-int storage_area_progblocks(const struct storage_area *area, size_t start,
-			    const struct storage_area_db *db, size_t bcnt);
 
 /**
  * @brief	Program storage area.
@@ -173,15 +147,36 @@ int storage_area_progblocks(const struct storage_area *area, size_t start,
 int storage_area_prog(const struct storage_area *area, size_t start,
 		      const void *data, size_t len);
 
+struct storage_area_db { /* storage area data block */
+	void *data;	/* pointer to data */
+	size_t len;	/* data size */
+};
+
 /**
- * @brief	Total size of storage area datablocks.
+ * @brief	Read storage area blocks.
  *
- * @param db	pointer to datablocks.
- * @param bcnt	datablock count.
+ * @param area	storage area.
+ * @param start	start in storage area (byte).
+ * @param db	data blocks for read.
+ * @param bcnt	data block count.
  *
- * @retval	Total size.
+ * @retval	0 on success else negative errno code.
  */
-size_t storage_area_dbsize(const struct storage_area_db *db, size_t bcnt);
+int storage_area_readblocks(const struct storage_area *area, size_t start,
+			    const struct storage_area_db *db, size_t bcnt);
+
+/**
+ * @brief	Program storage area blocks.
+ *
+ * @param area	storage area.
+ * @param start	start in storage area (byte).
+ * @param db	data blocks for program.
+ * @param bcnt	data block count.
+ *
+ * @retval	0 on success else negative errno code.
+ */
+int storage_area_progblocks(const struct storage_area *area, size_t start,
+			    const struct storage_area_db *db, size_t bcnt);
 
 /**
  * @}

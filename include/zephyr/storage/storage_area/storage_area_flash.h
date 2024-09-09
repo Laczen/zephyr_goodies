@@ -32,25 +32,22 @@ struct storage_area_flash {
 	const struct storage_area area;
 	const struct device *dev;
 	const size_t start;
-	const size_t size;
-	const size_t write_size;
-	const size_t erase_size;
 	const size_t xip_address;
 };
 
 extern const struct storage_area_api storage_area_flash_api;
 
-#define flash_storage_area(_dev, _start, _size, _xip, _ws, _es, _props)		\
+#define flash_storage_area(_dev, _start, _xip, _ws, _wb, _es, _props)		\
 	{									\
 		.area = {							\
 			.api = &storage_area_flash_api,				\
+			.write_size = _ws,					\
+			.write_blocks = _wb,					\
+			.erase_size = _es,					\
 			.props = _props,					\
 		},								\
 		.dev = _dev,							\
 		.start = _start,						\
-		.size = _size,							\
-		.write_size = _ws,						\
-		.erase_size = _es,						\
 		.xip_address = _xip,						\
 	}
 

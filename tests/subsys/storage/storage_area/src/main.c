@@ -22,7 +22,7 @@
 	DT_REG_ADDR(DT_MTD_FROM_FIXED_PARTITION(FLASH_AREA_NODE))
 
 const static struct storage_area_flash flash_area = flash_storage_area(
-	FLASH_AREA_DEVICE, FLASH_AREA_OFFSET, FLASH_AREA_SIZE, FLASH_AREA_XIP, 4,
+	FLASH_AREA_DEVICE, FLASH_AREA_OFFSET, FLASH_AREA_XIP, 4, FLASH_AREA_SIZE / 4,
 	4096, 0);
 const static struct storage_area *area = &flash_area.area;
 
