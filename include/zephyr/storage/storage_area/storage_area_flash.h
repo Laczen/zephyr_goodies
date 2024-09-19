@@ -37,13 +37,15 @@ struct storage_area_flash {
 
 extern const struct storage_area_api storage_area_flash_api;
 
-#define flash_storage_area(_dev, _start, _xip, _ws, _wb, _es, _props)		\
+#define flash_storage_area(_dev, _start, _xip, _ws, _es, _size, _props)		\
 	{									\
 		.area = {							\
-			.api = &storage_area_flash_api,				\
+			.api = ((_ws == 0) || ((_ws & (_ws - 1)) != 0) ||	\
+				((_es % _ws) != 0) || ((_size % _es) != 0)) ?	\
+		    		NULL : &storage_area_flash_api,			\
 			.write_size = _ws,					\
-			.write_blocks = _wb,					\
 			.erase_size = _es,					\
+			.erase_blocks = _size / _es,				\
 			.props = _props,					\
 		},								\
 		.dev = _dev,							\
