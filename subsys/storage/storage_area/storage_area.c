@@ -4,15 +4,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <zephyr/sys/util.h>
 #include <string.h>
+#include <errno.h>
+#include <zephyr/sys/util.h>
 #include <zephyr/storage/storage_area/storage_area.h>
 
 static bool sa_range_valid(const struct storage_area *area, size_t start,
 			   size_t len)
 {
 	const size_t asize = area->erase_size * area->erase_blocks;
-	
+
 	if ((asize < len) || ((asize - len) < start)) {
 		return false;
 	}
@@ -34,7 +35,7 @@ static size_t sa_chunk_size(const struct storage_area_chunk *ch, size_t cnt)
 int storage_area_read(const struct storage_area *area, size_t start,
 		      const struct storage_area_chunk *ch, size_t cnt)
 {
-	if ((area == NULL) || (area->api == NULL) || 
+	if ((area == NULL) || (area->api == NULL) ||
 	    (area->api->read == NULL)) {
 		return -ENOTSUP;
 	}
@@ -44,14 +45,25 @@ int storage_area_read(const struct storage_area *area, size_t start,
 	if (!sa_range_valid(area, start, len)) {
 		return -EINVAL;
 	}
-	
+
 	return area->api->read(area, start, ch, cnt);
+}
+
+int storage_area_dread(const struct storage_area *area, size_t start,
+		       void *data, size_t len)
+{
+	struct storage_area_chunk rd = {
+		.data = data,
+		.len = len,
+	};
+
+	return storage_area_read(area, start, &rd, 1U);
 }
 
 int storage_area_prog(const struct storage_area *area, size_t start,
 		      const struct storage_area_chunk *ch, size_t cnt)
 {
-	if ((area == NULL) || (area->api == NULL) || 
+	if ((area == NULL) || (area->api == NULL) ||
 	    (area->api->prog == NULL)) {
 		return -ENOTSUP;
 	}
@@ -62,7 +74,7 @@ int storage_area_prog(const struct storage_area *area, size_t start,
 	    (((len & (area->write_size - 1)) != 0U))) {
 		return -EINVAL;
 	}
-	
+
 	if (STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_READONLY)) {
 		return -EROFS;
 	}
@@ -70,10 +82,21 @@ int storage_area_prog(const struct storage_area *area, size_t start,
 	return area->api->prog(area, start, ch, cnt);
 }
 
+int storage_area_dprog(const struct storage_area *area, size_t start,
+		       const void *data, size_t len)
+{
+	struct storage_area_chunk wr = {
+		.data = (void *)data,
+		.len = len,
+	};
+
+	return storage_area_prog(area, start, &wr, 1U);
+}
+
 int storage_area_erase(const struct storage_area *area, size_t start,
 		       size_t bcnt)
 {
-	if ((area == NULL) || (area->api == NULL) || 
+	if ((area == NULL) || (area->api == NULL) ||
 	    (area->api->erase == NULL)) {
 		return -ENOTSUP;
 	}

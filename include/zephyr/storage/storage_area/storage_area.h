@@ -11,7 +11,7 @@
  * The storage area API is a subsystem that creates a unified method to work
  * with flash, eeprom, ram, disks, files, ... for storage. A storage area is
  * an area that has a number of constant sized erase blocks, and has constant
- * write block size.  
+ * write block size.
  *
  * There following methods area exposed:
  *   flash_area_read(),
@@ -36,7 +36,7 @@
  * The macro definitions xxxxx_storage_area(...) checks these conditions but
  * always succeeds. Trying to use a badly sized storage area will result in
  * failure of any of the exposed methods.
- * 
+ *
  */
 
 #ifndef ZEPHYR_INCLUDE_STORAGE_STORAGE_AREA_H_
@@ -44,7 +44,6 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include <errno.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -65,7 +64,7 @@ struct storage_area_chunk { /* storage area data chunk */
 };
 
 enum storage_area_properties_mask {
-	SA_PROP_READONLY = 0x0001,	
+	SA_PROP_READONLY = 0x0001,
 	SA_PROP_OVRWRITE = 0x0002,	/* overwrite is allowed */
 	SA_PROP_SUBWRITE = 0x0004,	/* sub writesize write is allowed */
 	SA_PROP_ZEROERASE = 0x0008,	/* erased value is 0x00 */
@@ -131,6 +130,19 @@ int storage_area_read(const struct storage_area *area, size_t start,
 		      const struct storage_area_chunk *ch, size_t cnt);
 
 /**
+ * @brief	Direct read from storage area.
+ *
+ * @param area	storage area.
+ * @param start	start in storage area (byte).
+ * @param data	data.
+ * @param len   read size.
+ *
+ * @retval	0 on success else negative errno code.
+ */
+int storage_area_dread(const struct storage_area *area, size_t start,
+		       void *data, size_t len);
+
+/**
  * @brief	Program storage chunks.
  *
  * @param area	storage area.
@@ -142,6 +154,19 @@ int storage_area_read(const struct storage_area *area, size_t start,
  */
 int storage_area_prog(const struct storage_area *area, size_t start,
 		      const struct storage_area_chunk *ch, size_t cnt);
+
+/**
+ * @brief	Direct program to storage area.
+ *
+ * @param area	storage area.
+ * @param start	start in storage area (byte).
+ * @param data	data to program.
+ * @param len   program size.
+ *
+ * @retval	0 on success else negative errno code.
+ */
+int storage_area_dprog(const struct storage_area *area, size_t start,
+		       const void *data, size_t len);
 
 /**
  * @brief	Erase storage area.

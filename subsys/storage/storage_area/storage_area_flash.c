@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <errno.h>
+#include <stdint.h>
 #include <zephyr/storage/storage_area/storage_area_flash.h>
 #include <zephyr/drivers/flash.h>
 
@@ -15,7 +17,7 @@ static int sa_flash_read(const struct storage_area *area, size_t start,
 {
 	const struct storage_area_flash *flash =
 		CONTAINER_OF(area, struct storage_area_flash, area);
-	
+
 	if (!device_is_ready(flash->dev)) {
 		return -ENODEV;
 	}
@@ -102,7 +104,7 @@ static int sa_flash_erase(
 {
 	const struct storage_area_flash *flash =
 		CONTAINER_OF(area, struct storage_area_flash, area);
-	
+
 	if (!device_is_ready(flash->dev)) {
 		return -ENODEV;
 	}
@@ -119,23 +121,22 @@ static int sa_flash_ioctl(const struct storage_area *area,
 {
 	const struct storage_area_flash *flash =
 		CONTAINER_OF(area, struct storage_area_flash, area);
-	
+
 	if (!device_is_ready(flash->dev)) {
 		return -ENODEV;
 	}
 
 	int rc = -ENOTSUP;
-	
+
 	switch(cmd) {
 	case SA_IOCTL_XIPADDRESS:
-		uintptr_t *xip_address = (uintptr_t *)data;
-
-		if (xip_address == NULL) {
+		if (data == NULL) {
 			rc = -EINVAL;
 			break;
 		}
 
-		*xip_address = (uintptr_t)flash->xip_address;
+		uintptr_t *xip_address = (uintptr_t *)data;
+		*xip_address = flash->xip_address;
 		rc = 0;
 		break;
 

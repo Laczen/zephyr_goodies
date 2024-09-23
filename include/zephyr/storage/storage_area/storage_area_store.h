@@ -72,6 +72,7 @@ struct storage_area_store {
 	bool (*move)(const struct storage_area_record *record);
 	void (*move_cb)(const struct storage_area_record *orig,
 			 const struct storage_area_record *dest);
+	void (*wrap_cb)(const struct storage_area_store *store);
 	struct storage_area_store_data *data;
 };
 
@@ -218,18 +219,35 @@ int storage_area_store_get_sector_cookie(const struct storage_area_store *store,
 					 size_t sector, void *cookie,
 				   	 size_t cksz);
 
-#define storage_area_store(_area, _cookie, _cookie_size, _size,	_spare, _keep,	\
-			   _moved, _data)					\
+#define storage_area_store(_area, _cookie, _cookie_size, _sector_size,		\
+			   _sector_cnt, _spare_sectors, _move, _move_cb,	\
+			   _wrap_cb, _data)					\
 	{									\
 		.area = _area,							\
-		.cookie = _cookie,						\
-		.cookie_size = _cookie_size,					\
-		.sector_size = _size,						\
-		.spare_sectors = _spare,					\
-		.keep_cb = _keep,						\
-		.moved_cb = _moved,						\
+		.sector_cookie = _cookie,					\
+		.sector_cookie_size = _cookie_size,				\
+		.sector_size = _sector_size,					\
+		.sector_cnt = _sector_cnt,					\
+		.spare_sectors = _spare_sectors,				\
+		.move = _move,							\
+		.move_cb = _move_cb,						\
+		.wrap_cb = _wrap_cb,						\
 		.data = _data,							\
 	}
+
+#define create_storage_area_store(_name, _area, _cookie, _cookie_size, 		\
+				  _sector_size,	_sector_cnt, _spare_sectors,	\
+				  _move, _move_cb, _wrap_cb)			\
+	static struct storage_area_store_data 					\
+		_storage_area_store_ ## _name ## _data;				\
+	static const struct storage_area_store _storage_area_store_ ## _name =	\
+		storage_area_store(_area, _cookie, _cookie_size, _sector_size,	\
+		_sector_cnt, _spare_sectors, _move, _move_cb, _wrap_cb,		\
+		&(_storage_area_store_ ## _name ## _data));
+
+#define get_storage_area_store(_name)						\
+	(struct storage_area_store *)&(_storage_area_store_ ## _name)
+
 /**
  * @}
  */

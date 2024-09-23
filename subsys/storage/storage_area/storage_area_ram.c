@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <string.h>
+#include <stdint.h>
+#include <errno.h>
 #include <zephyr/storage/storage_area/storage_area_ram.h>
 
 #include <zephyr/logging/log.h>
@@ -15,7 +18,7 @@ static int sa_ram_read(const struct storage_area *area, size_t start,
 	const struct storage_area_ram *ram =
 		CONTAINER_OF(area, struct storage_area_ram, area);
 	const uint8_t *rstart = (uint8_t *)ram->start;
-	
+
 	for (size_t i = 0U; i < cnt; i++) {
 
 		memcpy(ch[i].data, rstart + start, ch[i].len);
@@ -74,7 +77,7 @@ static int sa_ram_prog(const struct storage_area *area, size_t start,
 	}
 
 	return rc;
-	
+
 }
 
 static int sa_ram_ioctl(const struct storage_area *area,
@@ -82,18 +85,17 @@ static int sa_ram_ioctl(const struct storage_area *area,
 {
 	const struct storage_area_ram *ram =
 		CONTAINER_OF(area, struct storage_area_ram, area);
-	
+
 	int rc = -ENOTSUP;
-	
+
 	switch(cmd) {
 	case SA_IOCTL_XIPADDRESS:
-		uintptr_t *xip_address = (uintptr_t *)data;
-
-		if (xip_address == NULL) {
+		if (data == NULL) {
 			rc = -EINVAL;
 			break;
 		}
 
+		uintptr_t *xip_address = (uintptr_t *)data;
 		*xip_address = ram->start;
 		rc = 0;
 		break;

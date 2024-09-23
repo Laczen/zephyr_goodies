@@ -32,7 +32,7 @@ struct storage_area_flash {
 	const struct storage_area area;
 	const struct device *dev;
 	const size_t start;
-	const size_t xip_address;
+	uintptr_t xip_address;
 };
 
 extern const struct storage_area_api storage_area_flash_api;

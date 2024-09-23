@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <string.h>
+#include <errno.h>
 #include <zephyr/storage/storage_area/storage_area_eeprom.h>
 #include <zephyr/drivers/eeprom.h>
 
@@ -40,7 +42,7 @@ static int sa_eeprom_prog(const struct storage_area *area, size_t start,
 {
 	const struct storage_area_eeprom *eeprom =
 		CONTAINER_OF(area, struct storage_area_eeprom, area);
-	
+
 	if (!device_is_ready(eeprom->dev)) {
 		return -ENODEV;
 	}
@@ -106,7 +108,7 @@ static int sa_eeprom_ioctl(const struct storage_area *area,
 	}
 
 	int rc = -ENOTSUP;
-	
+
 	switch(cmd) {
 	default:
 		break;
