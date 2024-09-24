@@ -31,7 +31,61 @@ const static struct storage_area_flash flash_area = flash_storage_area(
 
 const char cookie[]="!NVS";
 bool move(const struct storage_area_record *record) {
-	if (record->sector == 0U) {
+	uint8_t nsz;
+	
+	if (storage_area_record_dread(record, 0U, &nsz, sizeof(nsz)) != 0) {	
+		return false;
+	}
+
+	if (record->size == (nsz + sizeof(nsz))) {
+		return false;
+	}
+
+	char name[nsz];
+
+	if (storage_area_record_dread(record, sizeof(nsz), &name, nsz) != 0) {
+		return false;
+	}
+
+	struct storage_area_record walk = {
+		.store = record->store,
+		.sector = record->sector,
+		.loc = record->loc,
+		.size = record->size,
+	};
+
+	while (true) {
+		int rc;
+		
+		rc = storage_area_record_next(record->store, &walk);
+		if (rc != 0) {
+			break;
+		}
+		
+		rc = storage_area_record_dread(&walk, 0U, &nsz, sizeof(nsz));
+		if (rc != 0) {
+			break;
+		}
+
+		if (nsz != sizeof(name)) {
+			continue;
+		}
+
+		char wname[nsz];
+
+		rc = storage_area_record_dread(&walk, sizeof(nsz), wname, nsz);
+		if (rc != 0) {
+			break;
+		}
+
+		if (memcmp(name, wname, nsz) != 0) {
+			continue;
+		}
+
+		break;
+	}
+
+	if (walk.size == 0U) {
 		return true;
 	}
 
@@ -68,33 +122,93 @@ void storage_area_store_report_state(char *tag,
 		data->loc, data->wrapcnt);
 }
 
-ZTEST_USER(storage_area_store_api, test_store)
+int write_data(const struct storage_area_store *store, char *name,
+	       uint32_t value)
 {
-	char name[] = "mydata";
-	size_t value = 0xF0F0;
+	uint8_t nsz = strlen(name);
 	struct storage_area_chunk wr[] = {
 		{
-			.data = &name,
-			.len = sizeof(name),
-		}, {
-			.data = &value,
-			.len = sizeof(value),
+			.data = &nsz,
+			.len = sizeof(nsz),
 		},
+		{
+			.data = name,
+			.len = nsz,
+		},
+		{
+			.data = &value,
+			.len = sizeof(uint32_t),
+		}
 	};
-	struct storage_area_record record = {
-		.store = NULL
-	};
+
+	return storage_area_store_write(store, wr, ARRAY_SIZE(wr));
+}
+
+int read_data(const struct storage_area_store *store, char *name,
+	      uint32_t *value)
+{
+	uint8_t nsz = strlen(name);
+	struct storage_area_record walk, match;
+	int rc = 0;
+
+	walk.store = NULL;
+	while (storage_area_record_next(store, &walk) == 0) {
+		uint8_t nlen;
+
+		rc = storage_area_record_dread(&walk, 0U, &nlen, sizeof(nlen));
+		if (rc != 0) {
+			break;
+		}
+
+		if (nlen != nsz) {
+			continue;
+		}
+
+		char rdname[nlen];
+
+		rc = storage_area_record_dread(&walk, 1U, rdname, nlen);
+		if (rc != 0) {
+			break;
+		}
+
+		if (memcmp(name, rdname, nlen) != 0) {
+			continue;
+		}
+
+		memcpy(&match, &walk, sizeof(walk));
+	}
+
+	if ((rc != 0) || (match.store != walk.store) || 
+	    ((match.size - nsz - 1U) != sizeof(uint32_t))) {
+		rc = -ENOENT;
+		goto end;
+	}
+
+	rc = storage_area_record_dread(&match, 1U + nsz, value, sizeof(uint32_t));
+end:
+	return rc;
+}
+
+ZTEST_USER(storage_area_store_api, test_store)
+{
 	struct storage_area_store *store = get_storage_area_store(test);
+	uint32_t wvalue1, wvalue2, rvalue;
 	int rc;
 
 	rc = storage_area_store_mount(store);
 	zassert_equal(rc, 0, "mount returned [%d]", rc);
 	storage_area_store_report_state("Mount", store);
 
-	rc = storage_area_store_write(store, wr, ARRAY_SIZE(wr));
+	wvalue1 = 0U;
+	rc = write_data(store, "data1", wvalue1);
 	zassert_equal(rc, 0, "write returned [%d]", rc);
 	storage_area_store_report_state("Write", store);
 	
+	rvalue = 0xFFFF;
+	rc = read_data(store, "data1", &rvalue);
+	zassert_equal(rc, 0, "read returned [%d]", rc);
+	zassert_equal(rvalue, wvalue1, "bad data read");
+
 	rc = storage_area_store_unmount(store);
 	zassert_equal(rc, 0, "unmount returned [%d]", rc);
 	storage_area_store_report_state("Unmount", store);
@@ -103,33 +217,64 @@ ZTEST_USER(storage_area_store_api, test_store)
 	zassert_equal(rc, 0, "mount returned [%d]", rc);
 	storage_area_store_report_state("Mount", store);
 
-	for (int i = 0; i < 8; i++) {
-		while (storage_area_store_write(store, wr, ARRAY_SIZE(wr)) == 0);
-		storage_area_store_report_state("Write", store);
-		rc = storage_area_store_compact(store);
-		zassert_equal(rc, 0, "advance returned [%d]", rc);
-		storage_area_store_report_state("Compact", store);
+	rvalue = 0xFFFF;
+	rc = read_data(store, "data1", &rvalue);
+	zassert_equal(rc, 0, "read returned [%d]", rc);
+	zassert_equal(rvalue, wvalue1, "bad data read");
+
+	wvalue2 = 0U;
+	for (int i = 0; i < store->sector_cnt; i++) {
+	 	while (write_data(store, "data2", wvalue2) == 0);
+	 	storage_area_store_report_state("Write", store);
+	 	rc = storage_area_store_compact(store);
+	 	zassert_equal(rc, 0, "compact returned [%d]", rc);
+	 	storage_area_store_report_state("Compact", store);
 	}
 
+	rvalue = 0xFFFF;
+	rc = read_data(store, "data1", &rvalue);
+	zassert_equal(rc, 0, "read returned [%d]", rc);
+	zassert_equal(rvalue, wvalue1, "bad data read");
+
+	rc = write_data(store, "data2", wvalue2);
 	rc = storage_area_store_unmount(store);
 	zassert_equal(rc, 0, "unmount returned [%d]", rc);
 	storage_area_store_report_state("Unmount", store);
 
+
+	size_t wroff;
+	uint8_t bad[STORAGE_AREA_WRITESIZE(store->area)];
+
+	wroff = store->data->sector * store->sector_size + store->data->loc;
+	wroff -= STORAGE_AREA_WRITESIZE(store->area);
+	memset(bad, 0x0, sizeof(bad));
+	rc = storage_area_dprog(store->area, wroff, bad, sizeof(bad));
+	zassert_equal(rc, 0, "dprog failed");
+
 	rc = storage_area_store_mount(store);
 	zassert_equal(rc, 0, "mount returned [%d]", rc);
 	storage_area_store_report_state("Mount", store);
+
+	rvalue = 0xFFFF;
+	rc = read_data(store, "data1", &rvalue);
+	zassert_equal(rc, 0, "read returned [%d]", rc);
+	zassert_equal(rvalue, wvalue1, "bad data read");
+
+	// rc = storage_area_store_mount(store);
+	// zassert_equal(rc, 0, "mount returned [%d]", rc);
+	// storage_area_store_report_state("Mount", store);
 	
-	rc = storage_area_store_compact(store);
-	zassert_equal(rc, 0, "compact returned [%d]", rc);
-	storage_area_store_report_state("Compact", store);
+	// rc = storage_area_store_compact(store);
+	// zassert_equal(rc, 0, "compact returned [%d]", rc);
+	// storage_area_store_report_state("Compact", store);
 
-	rc = storage_area_record_next(store, &record);
-	zassert_equal(rc, 0, "record next returned [%d]", rc);
+	// rc = storage_area_record_next(store, &record);
+	// zassert_equal(rc, 0, "record next returned [%d]", rc);
 
-	rc = storage_area_record_read(&record, 0U, wr, ARRAY_SIZE(wr));
-	zassert_equal(rc, 0, "record read returned [%d]", rc);
+	// rc = storage_area_record_read(&record, 0U, wr, ARRAY_SIZE(wr));
+	// zassert_equal(rc, 0, "record read returned [%d]", rc);
 
-	rc = storage_area_store_compact(store);
+	// rc = storage_area_store_compact(store);
 }
 
 ZTEST_SUITE(storage_area_store_api, NULL, storage_area_store_api_setup,

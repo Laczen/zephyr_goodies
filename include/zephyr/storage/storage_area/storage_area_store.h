@@ -69,9 +69,18 @@ struct storage_area_store {
 	size_t sector_size;
 	size_t sector_cnt;
 	size_t spare_sectors;
+	/* move function is used to evaluate if record should
+	 * be copied to maintain persistence
+	 */
 	bool (*move)(const struct storage_area_record *record);
+	/* move_cb is called after moving a record and can e.g.
+	 * be used to update a hash table of records.
+	 */
 	void (*move_cb)(const struct storage_area_record *orig,
 			 const struct storage_area_record *dest);
+	/* wrap_cb is called when the storage area wraps around,
+	 * and can e.g. be  used to update the sector_cookie
+	 */
 	void (*wrap_cb)(const struct storage_area_store *store);
 	struct storage_area_store_data *data;
 };
