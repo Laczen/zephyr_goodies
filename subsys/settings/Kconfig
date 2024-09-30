@@ -1,0 +1,12 @@
+# Copyright (c) 2024 Laczen
+# SPDX-License-Identifier: Apache-2.0
+
+if SETTINGS
+
+config SETTINGS_STORAGE_AREA_STORE
+	bool "Settings on storage area store"
+	depends on STORAGE_AREA_STORE
+	help
+	  Enable support for settings on a storage area store.
+
+endif #SETTINGS

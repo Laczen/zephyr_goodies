@@ -11,14 +11,22 @@
  * The storage area API is a subsystem that creates a unified method to work
  * with flash, eeprom, ram, disks, files, ... for storage. A storage area is
  * an area that has a number of constant sized erase blocks, and has constant
- * write block size.
+ * write block size. The storage area does not necessarily inherit the
+ * limitations of the underlying storage device but rather defines a method of
+ * how the underlying storage device will be used (however it does not remove
+ * any limitations of the underlying storage device). A storage area can be
+ * defined with wrong properties, optionally the definition will be checked
+ * by defining the Kconfig option `CONFIG_STORAGE_AREA_VERIFY` that is by
+ * default enabled for `DEBUG`builds.
+ * 
  *
  * There following methods area exposed:
- *   flash_area_read(),
- *   flash_area_prog(),
- *   flash_area_readblocks(),
- *   flash_area_progblocks(),
- *   flash_area_ioctl() - used for erasing,
+ *   storage_area_read(), 	** read chunks **
+ *   storage_area_dread(),	** read data direct **
+ *   storage_area_prog(),	** program chunks **
+ *   storage_area_dprog(),	** program data direct **
+ *   storage_area_erase(),	** erase (in erase block addressing) **
+ *   storage_area_ioctl() 	** used for e.g. getting xip addresses **
  *
  * The subsystem is easy extendable to create custom (virtual) storage areas
  * that consist of e.g. a combination of flash and ram, a encrypted storage
@@ -29,6 +37,9 @@
  * 	flash_storage_area(dev, start, xip_address, write_size, erase_size,
  *                         size, properties);
  * struct storage_area *area = &fa.area;
+ *
+ * For other storage devices (eeprom, ram, disk, ...) similar macros are
+ * defines, but they might differ slightly.
  *
  * The write_size, erase_size, ... are declarations of how the storage_area
  * will be used The write_size is limited to a power of 2, erase_size should
@@ -58,22 +69,20 @@ extern "C" {
 
 struct storage_area;
 
-struct storage_area_chunk { /* storage area data chunk */
+struct storage_area_chunk {	/* storage area data chunk */
 	void *data;	/* pointer to data */
 	size_t len;	/* data length */
 };
 
 enum storage_area_properties_mask {
 	SA_PROP_READONLY = 0x0001,
-	SA_PROP_OVRWRITE = 0x0002,	/* overwrite is allowed */
-	SA_PROP_SUBWRITE = 0x0004,	/* sub writesize write is allowed */
+	SA_PROP_FOVRWRITE = 0x0002,	/* full overwrite (ram, rram, ...) */
+	SA_PROP_LOVRWRITE = 0x0004,	/* limited overwrite (nor flash) */
 	SA_PROP_ZEROERASE = 0x0008,	/* erased value is 0x00 */
 };
 
 enum storage_area_ioctl_cmd {
 	SA_IOCTL_NONE,
-	SA_IOCTL_WRITEPREPARE,	/* prepare erase region for writing */
-	SA_IOCTL_ERASE,		/* erase region */
 	SA_IOCTL_XIPADDRESS,	/* retrieve the storage area xip address */
 };
 
@@ -110,9 +119,11 @@ struct storage_area {
 #define STORAGE_AREA_HAS_PROPERTY(area, prop) ((area->props & prop) == prop)
 #define STORAGE_AREA_WRITESIZE(area) area->write_size
 #define STORAGE_AREA_ERASESIZE(area) area->erase_size
-#define STORAGE_AREA_SIZE(area) area->size
-#define STORAGE_AREA_OVRWRITE(area)						\
-	STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_OVRWRITE)
+#define STORAGE_AREA_SIZE(area) area->erase_size * area->erase_blocks
+#define STORAGE_AREA_FOVRWRITE(area)						\
+	STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_FOVRWRITE)
+#define STORAGE_AREA_LOVRWRITE(area)						\
+	STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_LOVRWRITE)
 #define STORAGE_AREA_ERASEVALUE(area)						\
 	STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_ZEROERASE) ? 0x00 : 0xff
 

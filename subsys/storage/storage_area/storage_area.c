@@ -9,12 +9,16 @@
 #include <zephyr/sys/util.h>
 #include <zephyr/storage/storage_area/storage_area.h>
 
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(storage_area, CONFIG_STORAGE_AREA_LOG_LEVEL);
+
 static bool sa_range_valid(const struct storage_area *area, size_t start,
 			   size_t len)
 {
 	const size_t asize = area->erase_size * area->erase_blocks;
 
 	if ((asize < len) || ((asize - len) < start)) {
+		LOG_DBG("Invalid range");
 		return false;
 	}
 
@@ -76,6 +80,7 @@ int storage_area_prog(const struct storage_area *area, size_t start,
 	}
 
 	if (STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_READONLY)) {
+		LOG_DBG("prog not supported (read-only)");
 		return -EROFS;
 	}
 
@@ -104,10 +109,12 @@ int storage_area_erase(const struct storage_area *area, size_t start,
 	const size_t ablocks = area->erase_blocks;
 
 	if ((ablocks < bcnt) || ((ablocks - bcnt) < start)) {
+		LOG_DBG("invalid range");
 		return -EINVAL;
 	}
 
 	if (STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_READONLY)) {
+		LOG_DBG("erase not supported (read-only)");
 		return -EROFS;
 	}
 

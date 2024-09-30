@@ -20,7 +20,7 @@
 extern "C" {
 #endif
 
-
+#define STORAGE_AREA_FLASH_NO_XIP (-1)
 /**
  * @brief Storage_area_flash interface
  * @defgroup Storage_area_flash_interface Storage_area_flash interface

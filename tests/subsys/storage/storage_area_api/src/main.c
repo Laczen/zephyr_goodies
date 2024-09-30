@@ -10,26 +10,62 @@
 #include <zephyr/kernel.h>
 #include <zephyr/ztest.h>
 #include <zephyr/devicetree.h>
-#include <zephyr/storage/storage_area/storage_area_flash.h>
-#include <zephyr/storage/storage_area/storage_area_eeprom.h>
-#include <zephyr/storage/storage_area/storage_area_ram.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(sa_api_test);
 
+#ifdef CONFIG_STORAGE_AREA_FLASH
+#include <zephyr/storage/storage_area/storage_area_flash.h>
 #define FLASH_AREA_NODE		DT_NODELABEL(storage_partition)
 #define FLASH_AREA_OFFSET	DT_REG_ADDR(FLASH_AREA_NODE)
-#define FLASH_AREA_SIZE		DT_REG_SIZE(FLASH_AREA_NODE)
 #define FLASH_AREA_DEVICE							\
 	DEVICE_DT_GET(DT_MTD_FROM_FIXED_PARTITION(FLASH_AREA_NODE))
 #define FLASH_AREA_XIP		FLASH_AREA_OFFSET + 				\
 	DT_REG_ADDR(DT_MTD_FROM_FIXED_PARTITION(FLASH_AREA_NODE))
-#define FLASH_AREA_WBS		8
+#define AREA_SIZE		DT_REG_SIZE(FLASH_AREA_NODE)
+#define AREA_ERASE_SIZE		4096
+#define AREA_WRITE_SIZE		512
 
-const static struct storage_area_flash flash_area = flash_storage_area(
-	FLASH_AREA_DEVICE, FLASH_AREA_OFFSET, FLASH_AREA_XIP, FLASH_AREA_WBS,
-	4096, FLASH_AREA_SIZE, 0);
-const static struct storage_area *area = &flash_area.area;
+const static struct storage_area_flash area = flash_storage_area(
+	FLASH_AREA_DEVICE, FLASH_AREA_OFFSET, FLASH_AREA_XIP, AREA_WRITE_SIZE,
+	AREA_ERASE_SIZE, AREA_SIZE, SA_PROP_LOVRWRITE);
+#endif /* CONFIG_STORAGE_AREA_FLASH */
+
+#ifdef CONFIG_STORAGE_AREA_EEPROM
+#include <zephyr/storage/storage_area/storage_area_eeprom.h>
+#define EEPROM_NODE		DT_ALIAS(eeprom_0)
+#define EEPROM_AREA_DEVICE	DEVICE_DT_GET(EEPROM_NODE)
+#define AREA_SIZE		DT_PROP(EEPROM_NODE, size)
+#define AREA_ERASE_SIZE		1024
+#define AREA_WRITE_SIZE		4
+
+const static struct storage_area_eeprom area = eeprom_storage_area(
+	EEPROM_AREA_DEVICE, 0U, AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE, 0);
+#endif /* CONFIG_STORAGE_AREA_EEPROM */
+
+#ifdef CONFIG_STORAGE_AREA_RAM
+#include <zephyr/storage/storage_area/storage_area_ram.h>
+#define RAM_NODE	DT_NODELABEL(storage_sram)
+#define AREA_SIZE	DT_REG_SIZE(RAM_NODE)
+#define AREA_ERASE_SIZE	4096
+#define AREA_WRITE_SIZE	4
+const static struct storage_area_ram area = ram_storage_area(
+	DT_REG_ADDR(RAM_NODE), AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE, 0);
+#endif /* CONFIG_STORAGE_AREA_RAM */
+
+#ifdef CONFIG_STORAGE_AREA_DISK
+#include <zephyr/storage/storage_area/storage_area_disk.h>
+#define DISK_NODE	DT_NODELABEL(ramdisk0)
+#define DISK_NAME	DT_PROP(DISK_NODE, disk_name)
+#define DISK_SSIZE	DT_PROP(DISK_NODE, sector_size)
+#define DISK_SCNT	DT_PROP(DISK_NODE, sector_count)
+#define AREA_SIZE 	DISK_SCNT * DISK_SSIZE / 2
+#define AREA_ERASE_SIZE	DISK_SSIZE
+#define AREA_WRITE_SIZE	DISK_SSIZE
+const static struct storage_area_disk area = disk_storage_area(
+	DISK_NAME, DISK_SCNT / 2, DISK_SSIZE, AREA_WRITE_SIZE, AREA_ERASE_SIZE,
+	AREA_SIZE, 0);
+#endif /* CONFIG_STORAGE_AREA_DISK */
 
 static void *storage_area_api_setup(void)
 {
@@ -38,15 +74,16 @@ static void *storage_area_api_setup(void)
 
 static void storage_area_api_before(void *)
 {
-	int rc = storage_area_erase(area, 0, 1);
+	const struct storage_area *sa = &area.area;
+	int rc = storage_area_erase(sa, 0, 1);
 	zassert_equal(rc, 0, "erase returned [%d]", rc);
 }
 
 ZTEST_USER(storage_area_api, test_read_write_simple)
 {
-	int rc;
-	uint8_t wr[STORAGE_AREA_WRITESIZE(area)];
-	uint8_t rd[STORAGE_AREA_WRITESIZE(area)];
+	const struct storage_area *sa = &area.area;
+	uint8_t wr[STORAGE_AREA_WRITESIZE(sa)];
+	uint8_t rd[STORAGE_AREA_WRITESIZE(sa)];
 	struct storage_area_chunk rd_chunk = {
 		.data = &rd,
 		.len = sizeof(rd),
@@ -55,15 +92,16 @@ ZTEST_USER(storage_area_api, test_read_write_simple)
 		.data = &wr,
 		.len = sizeof(wr),
 	};
+	int rc;
 
 
 	memset(wr, 'T', sizeof(wr));
 	memset(rd, 0, sizeof(rd));
 
-	rc = storage_area_prog(area, 0U, &wr_chunk, 1U);
+	rc = storage_area_prog(sa, 0U, &wr_chunk, 1U);
 	zassert_equal(rc, 0, "prog returned [%d]", rc);
 
-	rc = storage_area_read(area, 0U, &rd_chunk, 1U);
+	rc = storage_area_read(sa, 0U, &rd_chunk, 1U);
 	zassert_equal(rc, 0, "read returned [%d]", rc);
 
 	zassert_equal(memcmp(rd, wr, sizeof(wr)), 0, "data mismatch");
@@ -71,17 +109,18 @@ ZTEST_USER(storage_area_api, test_read_write_simple)
 
 ZTEST_USER(storage_area_api, test_read_write_direct)
 {
+	const struct storage_area *sa = &area.area;
+	uint8_t wr[STORAGE_AREA_WRITESIZE(sa)];
+	uint8_t rd[STORAGE_AREA_WRITESIZE(sa)];
 	int rc;
-	uint8_t wr[STORAGE_AREA_WRITESIZE(area)];
-	uint8_t rd[STORAGE_AREA_WRITESIZE(area)];
 
 	memset(wr, 'T', sizeof(wr));
 	memset(rd, 0, sizeof(rd));
 
-	rc = storage_area_dprog(area, 0U, wr, sizeof(wr));
+	rc = storage_area_dprog(sa, 0U, wr, sizeof(wr));
 	zassert_equal(rc, 0, "prog returned [%d]", rc);
 
-	rc = storage_area_dread(area, 0U, rd, sizeof(rd));
+	rc = storage_area_dread(sa, 0U, rd, sizeof(rd));
 	zassert_equal(rc, 0, "read returned [%d]", rc);
 
 	zassert_equal(memcmp(rd, wr, sizeof(wr)), 0, "data mismatch");
@@ -89,11 +128,11 @@ ZTEST_USER(storage_area_api, test_read_write_direct)
 
 ZTEST_USER(storage_area_api, test_read_write_blocks)
 {
-	int rc;
+	const struct storage_area *sa = &area.area;
 	uint8_t magic = 0xA0;
-	uint8_t wr[STORAGE_AREA_WRITESIZE(area)];
-	uint8_t rd[STORAGE_AREA_WRITESIZE(area)];
-	uint8_t fill[STORAGE_AREA_WRITESIZE(area) - 1];
+	uint8_t wr[STORAGE_AREA_WRITESIZE(sa)];
+	uint8_t rd[STORAGE_AREA_WRITESIZE(sa)];
+	uint8_t fill[STORAGE_AREA_WRITESIZE(sa) - 1];
 	struct storage_area_chunk rd_chunk[] =
 	{
 		{
@@ -120,20 +159,35 @@ ZTEST_USER(storage_area_api, test_read_write_blocks)
 			.len = sizeof(fill),
 		},
 	};
+	int rc;
 
 	memset(fill, 0xff, sizeof(fill));
 	memset(wr, 'T', sizeof(wr));
 	memset(rd, 0, sizeof(rd));
 
-	rc = storage_area_prog(area, 0U, wr_chunk, ARRAY_SIZE(wr_chunk));
+	rc = storage_area_prog(sa, 0U, wr_chunk, ARRAY_SIZE(wr_chunk));
 	zassert_equal(rc, 0, "prog returned [%d]", rc);
 
-	rc = storage_area_read(area, 0U, rd_chunk, ARRAY_SIZE(rd_chunk));
+	rc = storage_area_read(sa, 0U, rd_chunk, ARRAY_SIZE(rd_chunk));
 	zassert_equal(rc, 0, "read returned [%d]", rc);
 
 	zassert_equal(magic, 0xA0, "magic has changed");
 	zassert_equal(memcmp(rd, wr, sizeof(wr)), 0, "data mismatch");
+}
 
+ZTEST_USER(storage_area_api, test_ioctl)
+{
+	const struct storage_area *sa = &area.area;
+	uintptr_t xip;
+
+	int rc = storage_area_ioctl(sa, SA_IOCTL_XIPADDRESS, &xip);
+	
+	if ((IS_ENABLED(CONFIG_STORAGE_AREA_DISK)) ||
+	    (IS_ENABLED(CONFIG_STORAGE_AREA_EEPROM))) {
+		zassert_equal(rc, -ENOTSUP, "xip returned invalid address");
+	} else {
+		zassert_equal(rc, 0, "xip returned no address");
+	}
 }
 
 ZTEST_SUITE(storage_area_api, NULL, storage_area_api_setup,

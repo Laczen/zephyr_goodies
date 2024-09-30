@@ -43,7 +43,7 @@ extern const struct storage_area_api storage_area_ram_api;
 			.write_size = _ws,					\
 			.erase_size = _es,					\
 			.erase_blocks = _size / _es,				\
-			.props = _props | SA_PROP_OVRWRITE | SA_PROP_ZEROERASE,	\
+			.props = _props | SA_PROP_FOVRWRITE | SA_PROP_ZEROERASE,\
 		},								\
 		.start = _start,						\
 	}

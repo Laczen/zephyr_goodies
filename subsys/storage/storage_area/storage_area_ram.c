@@ -10,7 +10,7 @@
 #include <zephyr/storage/storage_area/storage_area_ram.h>
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(sa_ram, CONFIG_STORAGE_AREA_LOG_LEVEL);
+LOG_MODULE_REGISTER(storage_area_ram, CONFIG_STORAGE_AREA_LOG_LEVEL);
 
 static int sa_ram_read(const struct storage_area *area, size_t start,
 		       const struct storage_area_chunk *ch, size_t cnt)
@@ -62,12 +62,10 @@ static int sa_ram_prog(const struct storage_area *area, size_t start,
 			size_t wrlen = blen & ~(align - 1);
 
 			memcpy(rstart + start, data8, wrlen);
-			if (rc != 0) {
-				break;
-			}
-
+			
 			blen -= wrlen;
 			data8 += wrlen;
+			start += wrlen;
 		}
 
 		if (blen > 0U) {
@@ -77,7 +75,24 @@ static int sa_ram_prog(const struct storage_area *area, size_t start,
 	}
 
 	return rc;
+}
 
+static int sa_ram_erase(const struct storage_area *area, size_t start,
+			size_t len)
+{
+	const struct storage_area_ram *ram =
+		CONTAINER_OF(area, struct storage_area_ram, area);
+
+	start *= area->erase_size;
+	
+	for (size_t i = 0; i < len; i++) {
+		uint8_t *rstart = (uint8_t *)ram->start;
+		(void)memset(rstart + start, STORAGE_AREA_ERASEVALUE(area),
+		       	     area->erase_size);
+		start += area->erase_size;
+	}
+
+	return 0;
 }
 
 static int sa_ram_ioctl(const struct storage_area *area,
@@ -91,6 +106,7 @@ static int sa_ram_ioctl(const struct storage_area *area,
 	switch(cmd) {
 	case SA_IOCTL_XIPADDRESS:
 		if (data == NULL) {
+			LOG_DBG("No return data supplied");
 			rc = -EINVAL;
 			break;
 		}
@@ -110,5 +126,6 @@ static int sa_ram_ioctl(const struct storage_area *area,
 const struct storage_area_api storage_area_ram_api = {
 	.read = sa_ram_read,
 	.prog = sa_ram_prog,
+	.erase = sa_ram_erase,
 	.ioctl = sa_ram_ioctl,
 };

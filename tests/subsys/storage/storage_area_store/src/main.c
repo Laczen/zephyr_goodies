@@ -10,26 +10,52 @@
 #include <zephyr/kernel.h>
 #include <zephyr/ztest.h>
 #include <zephyr/devicetree.h>
-#include <zephyr/storage/storage_area/storage_area_flash.h>
 #include <zephyr/storage/storage_area/storage_area_store.h>
 #include <zephyr/logging/log.h>
 
 LOG_MODULE_REGISTER(sas_test);
 
+#ifdef CONFIG_STORAGE_AREA_FLASH
+#include <zephyr/storage/storage_area/storage_area_flash.h>
 #define FLASH_AREA_NODE		DT_NODELABEL(storage_partition)
 #define FLASH_AREA_OFFSET	DT_REG_ADDR(FLASH_AREA_NODE)
-#define FLASH_AREA_SIZE		DT_REG_SIZE(FLASH_AREA_NODE)
 #define FLASH_AREA_DEVICE							\
 	DEVICE_DT_GET(DT_MTD_FROM_FIXED_PARTITION(FLASH_AREA_NODE))
 #define FLASH_AREA_XIP		FLASH_AREA_OFFSET + 				\
 	DT_REG_ADDR(DT_MTD_FROM_FIXED_PARTITION(FLASH_AREA_NODE))
-#define FLASH_AREA_WBS		8
+#define AREA_SIZE		DT_REG_SIZE(FLASH_AREA_NODE)
+#define AREA_ERASE_SIZE		4096
+#define AREA_WRITE_SIZE		512
 
-const static struct storage_area_flash flash_area = flash_storage_area(
-	FLASH_AREA_DEVICE, FLASH_AREA_OFFSET, FLASH_AREA_XIP, FLASH_AREA_WBS,
-	4096, FLASH_AREA_SIZE, 0);
+const static struct storage_area_flash area = flash_storage_area(
+	FLASH_AREA_DEVICE, FLASH_AREA_OFFSET, FLASH_AREA_XIP, AREA_WRITE_SIZE,
+	AREA_ERASE_SIZE, AREA_SIZE, SA_PROP_LOVRWRITE);
+#endif /* CONFIG_STORAGE_AREA_FLASH */
+
+#ifdef CONFIG_STORAGE_AREA_EEPROM
+#include <zephyr/storage/storage_area/storage_area_eeprom.h>
+#define EEPROM_NODE		DT_ALIAS(eeprom_0)
+#define EEPROM_AREA_DEVICE	DEVICE_DT_GET(EEPROM_NODE)
+#define AREA_SIZE		DT_PROP(EEPROM_NODE, size)
+#define AREA_ERASE_SIZE		1024
+#define AREA_WRITE_SIZE		4
+
+const static struct storage_area_eeprom area = eeprom_storage_area(
+	EEPROM_AREA_DEVICE, 0U, AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE, 0);
+#endif /* CONFIG_STORAGE_AREA_EEPROM */
+
+#ifdef CONFIG_STORAGE_AREA_RAM
+#include <zephyr/storage/storage_area/storage_area_ram.h>
+#define RAM_NODE		DT_NODELABEL(storage_sram)
+#define AREA_SIZE		DT_REG_SIZE(RAM_NODE)
+#define AREA_ERASE_SIZE		4096
+#define AREA_WRITE_SIZE		4
+const static struct storage_area_ram area = ram_storage_area(
+	DT_REG_ADDR(RAM_NODE), AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE, 0);
+#endif /* CONFIG_STORAGE_AREA_RAM */
 
 const char cookie[]="!NVS";
+
 bool move(const struct storage_area_record *record) {
 	uint8_t nsz;
 	
@@ -99,8 +125,10 @@ void move_cb(const struct storage_area_record *src,
 		dst->loc);
 }
 
-create_storage_area_store(test, &flash_area.area, (void *)cookie,
-	sizeof(cookie), 1024, 8, 4, move, move_cb, NULL);
+#define SECTOR_SIZE 4096
+create_storage_area_store(test, &area.area, (void *)cookie, sizeof(cookie),
+			  SECTOR_SIZE, AREA_SIZE / SECTOR_SIZE,
+			  AREA_ERASE_SIZE / SECTOR_SIZE, move, move_cb, NULL);
 
 static void *storage_area_store_api_setup(void)
 {
@@ -109,7 +137,7 @@ static void *storage_area_store_api_setup(void)
 
 static void storage_area_store_api_before(void *)
 {
-	int rc = storage_area_erase(&flash_area.area, 0, 1);
+	int rc = storage_area_erase(&area.area, 0, 1);
 	zassert_equal(rc, 0, "erase returned [%d]", rc);
 }
 
@@ -195,7 +223,7 @@ ZTEST_USER(storage_area_store_api, test_store)
 	uint32_t wvalue1, wvalue2, rvalue;
 	int rc;
 
-	rc = storage_area_store_mount(store);
+	rc = storage_area_store_mount(store, NULL);
 	zassert_equal(rc, 0, "mount returned [%d]", rc);
 	storage_area_store_report_state("Mount", store);
 
@@ -213,7 +241,7 @@ ZTEST_USER(storage_area_store_api, test_store)
 	zassert_equal(rc, 0, "unmount returned [%d]", rc);
 	storage_area_store_report_state("Unmount", store);
 
-	rc = storage_area_store_mount(store);
+	rc = storage_area_store_mount(store, NULL);
 	zassert_equal(rc, 0, "mount returned [%d]", rc);
 	storage_area_store_report_state("Mount", store);
 
@@ -221,6 +249,16 @@ ZTEST_USER(storage_area_store_api, test_store)
 	rc = read_data(store, "data1", &rvalue);
 	zassert_equal(rc, 0, "read returned [%d]", rc);
 	zassert_equal(rvalue, wvalue1, "bad data read");
+
+	wvalue2 = 0x00C0FFEE;
+	rc = write_data(store, "mydata/test", wvalue2);
+	zassert_equal(rc, 0, "write returned [%d]", rc);
+	storage_area_store_report_state("Write", store);
+
+	rvalue = 0xFFFF;
+	rc = read_data(store, "mydata/test", &rvalue);
+	zassert_equal(rc, 0, "read returned [%d]", rc);
+	zassert_equal(rvalue, wvalue2, "bad data read");
 
 	wvalue2 = 0U;
 	for (int i = 0; i < store->sector_cnt; i++) {
@@ -236,11 +274,9 @@ ZTEST_USER(storage_area_store_api, test_store)
 	zassert_equal(rc, 0, "read returned [%d]", rc);
 	zassert_equal(rvalue, wvalue1, "bad data read");
 
-	rc = write_data(store, "data2", wvalue2);
 	rc = storage_area_store_unmount(store);
 	zassert_equal(rc, 0, "unmount returned [%d]", rc);
 	storage_area_store_report_state("Unmount", store);
-
 
 	size_t wroff;
 	uint8_t bad[STORAGE_AREA_WRITESIZE(store->area)];
@@ -249,9 +285,9 @@ ZTEST_USER(storage_area_store_api, test_store)
 	wroff -= STORAGE_AREA_WRITESIZE(store->area);
 	memset(bad, 0x0, sizeof(bad));
 	rc = storage_area_dprog(store->area, wroff, bad, sizeof(bad));
-	zassert_equal(rc, 0, "dprog failed");
+	zassert_equal(rc, 0, "dprog failed [%d]", rc);
 
-	rc = storage_area_store_mount(store);
+	rc = storage_area_store_mount(store, NULL);
 	zassert_equal(rc, 0, "mount returned [%d]", rc);
 	storage_area_store_report_state("Mount", store);
 
@@ -259,22 +295,6 @@ ZTEST_USER(storage_area_store_api, test_store)
 	rc = read_data(store, "data1", &rvalue);
 	zassert_equal(rc, 0, "read returned [%d]", rc);
 	zassert_equal(rvalue, wvalue1, "bad data read");
-
-	// rc = storage_area_store_mount(store);
-	// zassert_equal(rc, 0, "mount returned [%d]", rc);
-	// storage_area_store_report_state("Mount", store);
-	
-	// rc = storage_area_store_compact(store);
-	// zassert_equal(rc, 0, "compact returned [%d]", rc);
-	// storage_area_store_report_state("Compact", store);
-
-	// rc = storage_area_record_next(store, &record);
-	// zassert_equal(rc, 0, "record next returned [%d]", rc);
-
-	// rc = storage_area_record_read(&record, 0U, wr, ARRAY_SIZE(wr));
-	// zassert_equal(rc, 0, "record read returned [%d]", rc);
-
-	// rc = storage_area_store_compact(store);
 }
 
 ZTEST_SUITE(storage_area_store_api, NULL, storage_area_store_api_setup,

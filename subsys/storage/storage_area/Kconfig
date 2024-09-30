@@ -8,13 +8,23 @@ menuconfig STORAGE_AREA
 
 if STORAGE_AREA
 
+config STORAGE_AREA_VERIFY
+	bool "Enable verification support"
+	default y if DEBUG
+	help
+	  Enable verification for storage areas. This will
+	  verify if the definition of the storage area is
+	  valid for the used backend.
+
 config STORAGE_AREA_DISK
 	bool "Storage area on disk"
+	select DISK_ACCESS
 	help
 	  Enable support for storage area on disk.
 
 config STORAGE_AREA_EEPROM
 	bool "Storage area on eeprom"
+	select EEPROM
 	help
 	  Enable support for storage area on eeprom.
 
@@ -57,6 +67,14 @@ config STORAGE_AREA_STORE_READONLY
 	  Disable the ability to write to a storage area store.
 	  This configuration is valid for ALL storage area
 	  stores.
+
+config STORAGE_AREA_STORE_DISABLEFBUPDATE
+	bool "Disable first byte update"
+	help
+	  Disable the ability to update the first byte of data
+	  that is used typically to invalidate a record when
+	  it is possible to rewrite. This configuration option
+	  is valid for ALL storage area stores.
 
 endif #STORAGE_AREA_STORE
 

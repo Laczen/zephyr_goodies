@@ -6,11 +6,11 @@
 
 /**
  * @file
- * @brief Public API for storage area eeprom subsystem
+ * @brief Public API for storage area disk subsystem
  */
 
-#ifndef ZEPHYR_INCLUDE_STORAGE_STORAGE_AREA_EEPROM_H_
-#define ZEPHYR_INCLUDE_STORAGE_STORAGE_AREA_EEPROM_H_
+#ifndef ZEPHYR_INCLUDE_STORAGE_STORAGE_AREA_DISK_H_
+#define ZEPHYR_INCLUDE_STORAGE_STORAGE_AREA_DISK_H_
 
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
@@ -22,33 +22,35 @@ extern "C" {
 
 
 /**
- * @brief Storage_area_eeprom interface
- * @defgroup Storage_area_eeprom_interface Storage_area_eeprom interface
+ * @brief Storage_area_disk interface
+ * @defgroup Storage_area_disk_interface Storage_area_disk interface
  * @ingroup Storage
  * @{
  */
 
-struct storage_area_eeprom {
+struct storage_area_disk {
 	const struct storage_area area;
-	const struct device *dev;
-	const size_t start;
+	const uint32_t start;
+	const size_t ssize;
+	const char name[];
 };
 
-extern const struct storage_area_api storage_area_eeprom_api;
+extern const struct storage_area_api storage_area_disk_api;
 
-#define eeprom_storage_area(_dev, _start, _ws, _es, _size, _props)		\
+#define disk_storage_area(_name, _start, _ssize, _ws, _es, _size, _props)	\
 	{									\
 		.area = {							\
 			.api = ((_ws == 0) || ((_ws & (_ws - 1)) != 0) ||	\
 				((_es % _ws) != 0) || ((_size % _es) != 0)) ?	\
-		    		NULL : &storage_area_eeprom_api,		\
+		    		NULL : &storage_area_disk_api,			\
 			.write_size = _ws,					\
 			.erase_size = _es,					\
 			.erase_blocks = _size / _es,				\
 			.props = _props | SA_PROP_FOVRWRITE,			\
 		},								\
-		.dev = _dev,							\
+		.name = _name,							\
 		.start = _start,						\
+		.ssize = _ssize,						\
 	}
 
 /**
@@ -59,4 +61,4 @@ extern const struct storage_area_api storage_area_eeprom_api;
 }
 #endif
 
-#endif /* ZEPHYR_INCLUDE_STORAGE_STORAGE_AREA_EEPROM_H_ */
+#endif /* ZEPHYR_INCLUDE_STORAGE_STORAGE_AREA_DISK_H_ */

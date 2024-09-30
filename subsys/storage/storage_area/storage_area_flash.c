@@ -10,19 +10,63 @@
 #include <zephyr/drivers/flash.h>
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(sa_flash, CONFIG_STORAGE_AREA_LOG_LEVEL);
+LOG_MODULE_REGISTER(storage_area_flash, CONFIG_STORAGE_AREA_LOG_LEVEL);
+
+static int sa_flash_valid(const struct storage_area_flash *flash)
+{
+	if (!device_is_ready(flash->dev)) {
+		LOG_DBG("Device is not ready");
+		return -ENODEV;
+	}
+
+	if (IS_ENABLED(CONFIG_STORAGE_AREA_VERIFY)) {
+		const struct storage_area *area = &flash->area;
+		const struct flash_parameters *param =
+			flash_get_parameters(flash->dev);
+		const size_t wbs = flash_get_write_block_size(flash->dev);
+		struct flash_pages_info info;
+
+		if (param == NULL) {
+			LOG_DBG("Could not obtain flash parameters");
+			return -EINVAL;
+		}
+
+		if ((area->write_size & (wbs - 1)) != 0) {
+			LOG_DBG("Bad write block size");
+			return -EINVAL;
+		}
+
+		for (size_t i = 0; i < area->erase_blocks; i++) {
+			size_t off = flash->start + i * area->erase_size;
+			int rc;
+
+			rc = flash_get_page_info_by_offs(flash->dev, off, &info);
+			if (rc != 0) {
+				LOG_DBG("Could not obtain page info");
+				return -EINVAL;
+			}
+
+			if ((info.start_offset != off) || 
+			    ((area->erase_size & (info.size - 1)) != 0)) {
+				LOG_DBG("Bad erase size");
+				return -EINVAL;
+			}
+		}
+	}
+
+	return 0;
+}
 
 static int sa_flash_read(const struct storage_area *area, size_t start,
 			 const struct storage_area_chunk *ch, size_t cnt)
 {
 	const struct storage_area_flash *flash =
 		CONTAINER_OF(area, struct storage_area_flash, area);
+	int rc = sa_flash_valid(flash);
 
-	if (!device_is_ready(flash->dev)) {
-		return -ENODEV;
+	if (rc != 0) {
+		goto end;
 	}
-
-	int rc = 0;
 
 	start += flash->start;
 	for (size_t i = 0U; i < cnt; i++) {
@@ -34,6 +78,10 @@ static int sa_flash_read(const struct storage_area *area, size_t start,
 		start += ch[i].len;
 	}
 
+	if (rc != 0) {
+		LOG_DBG("read failed at %x", start);
+	}
+end:
 	return rc;
 }
 
@@ -42,15 +90,14 @@ static int sa_flash_prog(const struct storage_area *area, size_t start,
 {
 	const struct storage_area_flash *flash =
 		CONTAINER_OF(area, struct storage_area_flash, area);
-
-	if (!device_is_ready(flash->dev)) {
-		return -ENODEV;
-	}
-
 	const size_t align = area->write_size;
 	uint8_t buf[align];
 	size_t bpos = 0U;
-	int rc = 0;
+	int rc = sa_flash_valid(flash);
+
+	if (rc != 0) {
+		goto end;
+	}
 
 	start += flash->start;
 	for (size_t i = 0U; i < cnt; i++) {
@@ -86,6 +133,7 @@ static int sa_flash_prog(const struct storage_area *area, size_t start,
 
 			blen -= wrlen;
 			data8 += wrlen;
+			start += wrlen;
 		}
 
 		if (blen > 0U) {
@@ -94,26 +142,34 @@ static int sa_flash_prog(const struct storage_area *area, size_t start,
 		}
 	}
 
+	if (rc != 0) {
+		LOG_DBG("prog failed at %x", start);
+	}
+end:
 	return rc;
 }
 
-static int sa_flash_erase(
-	const struct storage_area *area,
-	size_t start,
-	size_t len)
+static int sa_flash_erase(const struct storage_area *area, size_t start,
+			  size_t len)
 {
 	const struct storage_area_flash *flash =
 		CONTAINER_OF(area, struct storage_area_flash, area);
+	int rc = sa_flash_valid(flash);
 
-	if (!device_is_ready(flash->dev)) {
-		return -ENODEV;
+	if (rc != 0) {
+		goto end;
 	}
 
 	start *= area->erase_size;
 	len *= area->erase_size;
 
 	start += flash->start;
-	return flash_erase(flash->dev, start, len);
+	rc = flash_erase(flash->dev, start, len);
+	if (rc != 0) {
+		LOG_DBG("erase failed at %x", start);
+	}
+end:
+	return rc;
 }
 
 static int sa_flash_ioctl(const struct storage_area *area,
@@ -121,17 +177,23 @@ static int sa_flash_ioctl(const struct storage_area *area,
 {
 	const struct storage_area_flash *flash =
 		CONTAINER_OF(area, struct storage_area_flash, area);
+	int rc = sa_flash_valid(flash);
 
-	if (!device_is_ready(flash->dev)) {
-		return -ENODEV;
+	if (rc != 0) {
+		goto end;
 	}
 
-	int rc = -ENOTSUP;
-
+	rc = -ENOTSUP;
 	switch(cmd) {
 	case SA_IOCTL_XIPADDRESS:
 		if (data == NULL) {
+			LOG_DBG("No return data supplied");
 			rc = -EINVAL;
+			break;
+		}
+
+		if (flash->xip_address == STORAGE_AREA_FLASH_NO_XIP) {
+			rc = -ENOTSUP;
 			break;
 		}
 
@@ -143,7 +205,7 @@ static int sa_flash_ioctl(const struct storage_area *area,
 	default:
 		break;
 	}
-
+end:
 	return rc;
 }
 
