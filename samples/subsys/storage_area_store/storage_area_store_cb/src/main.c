@@ -15,28 +15,28 @@
 LOG_MODULE_REGISTER(sas_test);
 
 #include <zephyr/storage/storage_area/storage_area_flash.h>
-#define FLASH_AREA_NODE		DT_NODELABEL(storage_partition)
-#define FLASH_AREA_OFFSET	DT_REG_ADDR(FLASH_AREA_NODE)
-#define FLASH_AREA_DEVICE							\
+#define FLASH_AREA_NODE   DT_NODELABEL(storage_partition)
+#define FLASH_AREA_OFFSET DT_REG_ADDR(FLASH_AREA_NODE)
+#define FLASH_AREA_DEVICE                                                       \
 	DEVICE_DT_GET(DT_MTD_FROM_FIXED_PARTITION(FLASH_AREA_NODE))
-#define FLASH_AREA_XIP		FLASH_AREA_OFFSET + 				\
-	DT_REG_ADDR(DT_MTD_FROM_FIXED_PARTITION(FLASH_AREA_NODE))
-#define AREA_SIZE		DT_REG_SIZE(FLASH_AREA_NODE)
-#define AREA_ERASE_SIZE		4096
-#define AREA_WRITE_SIZE		8
+#define FLASH_AREA_XIP                                                          \
+	FLASH_AREA_OFFSET +                                                     \
+		DT_REG_ADDR(DT_MTD_FROM_FIXED_PARTITION(FLASH_AREA_NODE))
+#define AREA_SIZE       DT_REG_SIZE(FLASH_AREA_NODE)
+#define AREA_ERASE_SIZE 4096
+#define AREA_WRITE_SIZE 4
 
 const static struct storage_area_flash area = flash_storage_area(
-	FLASH_AREA_DEVICE, FLASH_AREA_OFFSET, FLASH_AREA_XIP,
-	AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE,
-	SA_PROP_LOVRWRITE);
+	FLASH_AREA_DEVICE, FLASH_AREA_OFFSET, FLASH_AREA_XIP, AREA_WRITE_SIZE,
+	AREA_ERASE_SIZE, AREA_SIZE, SA_PROP_LOVRWRITE);
 
-const char cookie[]="!NVS";
+const char cookie[] = "!NVS";
 
-#define SECTOR_SIZE	1024
+#define SECTOR_SIZE 1024
 /* This storage area store is using only 1 erase block */
-create_storage_area_store(test, &area.area, (void *)cookie,
-	sizeof(cookie), SECTOR_SIZE, AREA_ERASE_SIZE / SECTOR_SIZE, 0, NULL,
-	NULL, NULL);
+create_storage_area_store(test, &area.area, (void *)cookie, sizeof(cookie),
+			  SECTOR_SIZE, AREA_ERASE_SIZE / SECTOR_SIZE, 0U, 1U,
+			  NULL, NULL, NULL);
 
 struct __attribute__((packed)) data_format {
 	uint8_t state;
@@ -77,7 +77,8 @@ static int producer(const struct storage_area_store *store)
 		};
 
 		while (true) {
-			rc = storage_area_store_dwrite(store, &data, sizeof(data));
+			rc = storage_area_store_dwrite(store, &data,
+						       sizeof(data));
 			if (rc == -ENOSPC) {
 				LOG_INF("Added before advance [%d]", rcount);
 				/* Not doing any copy for keeping records */
@@ -90,7 +91,7 @@ static int producer(const struct storage_area_store *store)
 			if (rc == 0) {
 				rcount++;
 			}
-			
+
 			break;
 		}
 	}
@@ -117,14 +118,15 @@ static int consumer(const struct storage_area_store *store)
 		if (data.state == 0xFF) {
 			rcount++;
 			/* invalidate read data */
-			rc = storage_area_record_fbupdate(&walk, 0x0);
+			data.state = 0x0;
+			rc = storage_area_record_update(&walk, &data.state, 1U);
 			if (rc != 0) {
 				LOG_INF("FAIL");
 				break;
 			}
 		}
 	}
-	
+
 	LOG_INF("Consumer found [%d] valid records", rcount);
 	if (rcount != 8) {
 		LOG_INF("Some records were lost because data was erased");

@@ -23,8 +23,8 @@ extern "C" {
 #define STORAGE_AREA_FLASH_NO_XIP (-1)
 /**
  * @brief Storage_area_flash interface
- * @defgroup Storage_area_flash_interface Storage_area_flash interface
- * @ingroup Storage
+ * @defgroup storage_area_flash_interface Storage_area_flash interface
+ * @ingroup storage_apis
  * @{
  */
 
@@ -37,20 +37,22 @@ struct storage_area_flash {
 
 extern const struct storage_area_api storage_area_flash_api;
 
-#define flash_storage_area(_dev, _start, _xip, _ws, _es, _size, _props)		\
-	{									\
-		.area = {							\
-			.api = ((_ws == 0) || ((_ws & (_ws - 1)) != 0) ||	\
-				((_es % _ws) != 0) || ((_size % _es) != 0)) ?	\
-		    		NULL : &storage_area_flash_api,			\
-			.write_size = _ws,					\
-			.erase_size = _es,					\
-			.erase_blocks = _size / _es,				\
-			.props = _props,					\
-		},								\
-		.dev = _dev,							\
-		.start = _start,						\
-		.xip_address = _xip,						\
+#define flash_storage_area(_dev, _start, _xip, _ws, _es, _size, _props)         \
+	{                                                                       \
+		.area =                                                         \
+			{                                                       \
+				.api = ((_ws == 0) ||                           \
+					((_ws & (_ws - 1)) != 0) ||             \
+					((_es % _ws) != 0) ||                   \
+					((_size % _es) != 0))                   \
+					       ? NULL                           \
+					       : &storage_area_flash_api,       \
+				.write_size = _ws,                              \
+				.erase_size = _es,                              \
+				.erase_blocks = _size / _es,                    \
+				.props = _props,                                \
+			},                                                      \
+		.dev = _dev, .start = _start, .xip_address = _xip,              \
 	}
 
 /**

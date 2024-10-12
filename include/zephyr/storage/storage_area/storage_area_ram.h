@@ -19,11 +19,10 @@
 extern "C" {
 #endif
 
-
 /**
  * @brief Storage_area_ram interface
- * @defgroup Storage_area_ram_interface Storage_area_ram interface
- * @ingroup Storage
+ * @defgroup storage_area_ram_interface Storage_area_ram interface
+ * @ingroup storage_apis
  * @{
  */
 
@@ -34,18 +33,23 @@ struct storage_area_ram {
 
 extern const struct storage_area_api storage_area_ram_api;
 
-#define ram_storage_area(_start, _ws, _es, _size, _props)			\
-	{									\
-		.area = {							\
-			.api = ((_ws == 0) || ((_ws & (_ws - 1)) != 0) ||	\
-				((_es % _ws) != 0) || ((_size % _es) != 0)) ?	\
-		    		NULL : &storage_area_ram_api,			\
-			.write_size = _ws,					\
-			.erase_size = _es,					\
-			.erase_blocks = _size / _es,				\
-			.props = _props | SA_PROP_FOVRWRITE | SA_PROP_ZEROERASE,\
-		},								\
-		.start = _start,						\
+#define ram_storage_area(_start, _ws, _es, _size, _props)                       \
+	{                                                                       \
+		.area =                                                         \
+			{                                                       \
+				.api = ((_ws == 0) ||                           \
+					((_ws & (_ws - 1)) != 0) ||             \
+					((_es % _ws) != 0) ||                   \
+					((_size % _es) != 0))                   \
+					       ? NULL                           \
+					       : &storage_area_ram_api,         \
+				.write_size = _ws,                              \
+				.erase_size = _es,                              \
+				.erase_blocks = _size / _es,                    \
+				.props = _props | SA_PROP_FOVRWRITE |           \
+					 SA_PROP_ZEROERASE,                     \
+			},                                                      \
+		.start = _start,                                                \
 	}
 
 /**

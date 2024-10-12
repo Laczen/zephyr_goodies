@@ -20,11 +20,10 @@
 extern "C" {
 #endif
 
-
 /**
  * @brief Storage_area_eeprom interface
- * @defgroup Storage_area_eeprom_interface Storage_area_eeprom interface
- * @ingroup Storage
+ * @defgroup storage_area_eeprom_interface Storage_area_eeprom interface
+ * @ingroup storage_apis
  * @{
  */
 
@@ -36,19 +35,22 @@ struct storage_area_eeprom {
 
 extern const struct storage_area_api storage_area_eeprom_api;
 
-#define eeprom_storage_area(_dev, _start, _ws, _es, _size, _props)		\
-	{									\
-		.area = {							\
-			.api = ((_ws == 0) || ((_ws & (_ws - 1)) != 0) ||	\
-				((_es % _ws) != 0) || ((_size % _es) != 0)) ?	\
-		    		NULL : &storage_area_eeprom_api,		\
-			.write_size = _ws,					\
-			.erase_size = _es,					\
-			.erase_blocks = _size / _es,				\
-			.props = _props | SA_PROP_FOVRWRITE,			\
-		},								\
-		.dev = _dev,							\
-		.start = _start,						\
+#define eeprom_storage_area(_dev, _start, _ws, _es, _size, _props)              \
+	{                                                                       \
+		.area =                                                         \
+			{                                                       \
+				.api = ((_ws == 0) ||                           \
+					((_ws & (_ws - 1)) != 0) ||             \
+					((_es % _ws) != 0) ||                   \
+					((_size % _es) != 0))                   \
+					       ? NULL                           \
+					       : &storage_area_eeprom_api,      \
+				.write_size = _ws,                              \
+				.erase_size = _es,                              \
+				.erase_blocks = _size / _es,                    \
+				.props = _props | SA_PROP_FOVRWRITE,            \
+			},                                                      \
+		.dev = _dev, .start = _start,                                   \
 	}
 
 /**

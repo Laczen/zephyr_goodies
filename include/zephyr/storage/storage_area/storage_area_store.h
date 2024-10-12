@@ -6,35 +6,36 @@
 
 /**
  * @file
- * @brief Public API for storing data on a storage area 
+ * @brief Public API for storing data on a storage area
  *
- * The storage area store enables storage of data record on top of a
- * storage area. The record format is:
+ * The storage area store enables storage of records on top of a storage
+ * area. The record format is:
  *	magic | data size | data | crc32
  * with:
  *	magic (2 byte): second byte is a wrapcnt variable that is increased
  *                      each time storage area is wrapped around,
  *      data size (2 byte): little endian uint16_t,
- *	crc32 (4 byte): little endian uint32_t, calculated over data
+ *	crc32 (4 byte): little endian uint32_t, calculated over (part of) data,
  *
  * The storage area is divided into constant sized sectors that are either a
- * whole divider or a multiple of the storage area erase blocks. Sectors are
- * smaller then 64kB. When the underlying storage area has erase-blocks that
- * are larger then 64kB the erase-blocks are split up in multiple sectors.
+ * whole divider or a multiple of the storage area erase blocks.
  * Records are written consecutively to a sector. Each record is aligned to
  * the write size of the storage area. Records can be written to a sector
  * until space is exhausted (write return `-ENOSPC`).
  *
- * To create space for new record the storage area store can be "advanced" or
- * "compacted". The "advance" routine will simply take into use a next sector.
- * The "compact" routine will move certain records to the front of the storage
- * area store. The "compact" routine will use a callback routine "move" to
+ * To create space for new record the storage area store can be `advanced` or
+ * `ompacted`. The `advance` method will simply take into use a next sector.
+ * The `compact` method will move certain records to the front of the storage
+ * area store. The `compact` method uses a callback routine `move` to
  * determine if a record should be kept.
  *
- * The first byte of the data can be updated (if the storage area allows it).
- * Updating the first byte will make the data invalid (wrong crc), however it
- * can be used to mark a record as invalid (without checking the crc). So if
- * you would like to use this feature treat the first byte as a "valid" byte. 
+ * At the start of each sector a configurable `cookie` is (optionally) added,
+ * this `cookie` can be used to describe the data format and or a data version
+ * used inside a record.
+ *
+ * The part of data that is not included in the crc calculation can be updated
+ * (if the storage area allows it). Updating the part of data that is not
+ * included in the crc calculation can be used to mark a record as invalid.
  */
 
 #ifndef ZEPHYR_INCLUDE_STORAGE_STORAGE_AREA_STORE_H_
@@ -50,8 +51,8 @@ extern "C" {
 
 /**
  * @brief Storage_area_store interface
- * @defgroup Storage_area_store_interface Storage_area_store interface
- * @ingroup Storage
+ * @defgroup storage_area_store_interface Storage_area_store interface
+ * @ingroup storage_apis
  * @{
  */
 
@@ -75,8 +76,8 @@ struct storage_area_store_data {
 #endif
 	struct storage_area_store_compact_cb cb;
 	bool ready;
-	size_t sector; 	/* current sector */
-	size_t loc;  	/* current location */
+	size_t sector; /* current sector */
+	size_t loc;    /* current location */
 	uint8_t wrapcnt;
 };
 
@@ -87,6 +88,10 @@ struct storage_area_store {
 	size_t sector_size;
 	size_t sector_cnt;
 	size_t spare_sectors;
+	/* crc_skip determines the data that is skipped for the
+	 * crc calculation.
+	 */
+	size_t crc_skip;
 	/* wrap_cb is called when the storage area wraps around,
 	 * and can e.g. be  used to update the sector_cookie
 	 */
@@ -172,8 +177,6 @@ int storage_area_store_advance(const struct storage_area_store *store);
  *		REMARK: This can be a slow operation.
  *
  * @param store	storage area store.
- * @param cb	compact cb is used to evaluate what records need to be moved
- *		to maintain persistence
  *
  * @retval	0 on success else negative errno code.
  */
@@ -205,7 +208,7 @@ bool storage_area_record_valid(const struct storage_area_record *record);
  *
  * @param record storage area record.
  * @param start  offset in the record (data).
- * @param chunk  data chunk.
+ * @param ch	 data chunk.
  * @param cnt	 chunk count.
  *
  * @retval	 0 on success else negative errno code.
@@ -228,17 +231,18 @@ int storage_area_record_dread(const struct storage_area_record *record,
 			      size_t start, void *data, size_t len);
 
 /**
- * @brief	 Update the first byte of the record data. This is only possible
- *		 if the storage area supports multiple writes. The allowed
- *		 update data may be limited (e.g. only toggle bits from 1 to 0).
- *		 This can be used to invalidate records.  
+ * @brief	 Update the start of record data. This is only possible if the
+ *		 storage area supports multiple writes and the allowed update
+ *		 data may be limited (e.g. only toggle bits from 1 to 0).
+ *		 This can be used to invalidate records.
  *
  * @param record storage area record.
- * @param update new byte data to write.
+ * @param update new data to write.
+ * @param len	 write size.
  * @retval	 0 on success else negative errno code.
  */
-int storage_area_record_fbupdate(const struct storage_area_record *record,
-			         uint8_t update);
+int storage_area_record_update(const struct storage_area_record *record,
+			       void *data, size_t len);
 
 /**
  * @brief	 Get the cookie of a sector
@@ -252,36 +256,36 @@ int storage_area_record_fbupdate(const struct storage_area_record *record,
  */
 int storage_area_store_get_sector_cookie(const struct storage_area_store *store,
 					 size_t sector, void *cookie,
-				   	 size_t cksz);
+					 size_t cksz);
 
-#define storage_area_store(_area, _cookie, _cookie_size, _sector_size,		\
-			   _sector_cnt, _spare_sectors,  _wrap_cb, _data) {	\
-	.area = _area,								\
-	.sector_cookie = _cookie,						\
-	.sector_cookie_size = _cookie_size,					\
-	.sector_size = _sector_size,						\
-	.sector_cnt = _sector_cnt,						\
-	.spare_sectors = _spare_sectors,					\
-	.wrap_cb = _wrap_cb,							\
-	.data = _data,								\
-}
+#define storage_area_store(_area, _cookie, _cookie_size, _sector_size,          \
+			   _sector_cnt, _spare_sectors, _crc_skip, _wrap_cb,    \
+			   _data)                                               \
+	{                                                                       \
+		.area = _area, .sector_cookie = _cookie,                        \
+		.sector_cookie_size = _cookie_size,                             \
+		.sector_size = _sector_size, .sector_cnt = _sector_cnt,         \
+		.spare_sectors = _spare_sectors, .crc_skip = _crc_skip,         \
+		.wrap_cb = _wrap_cb, .data = _data,                             \
+	}
 
-#define create_storage_area_store(_name, _area, _cookie, _cookie_size, 		\
-				  _sector_size,	_sector_cnt, _spare_sectors,	\
-				  _move, _move_cb, _wrap_cb)			\
-	static struct storage_area_store_data 					\
-		_storage_area_store_ ## _name ## _data = {			\
-			.cb.move = _move,					\
-			.cb.move_cb = _move_cb,					\
-			.ready = false,						\
-		};								\
-	static const struct storage_area_store _storage_area_store_ ## _name =	\
-		storage_area_store(_area, _cookie, _cookie_size, _sector_size,	\
-		_sector_cnt, _spare_sectors, _wrap_cb,				\
-		&(_storage_area_store_ ## _name ## _data));
+#define create_storage_area_store(_name, _area, _cookie, _cookie_size,          \
+				  _sector_size, _sector_cnt, _spare_sectors,    \
+				  _crc_skip, _move, _move_cb, _wrap_cb)         \
+	static struct storage_area_store_data                                   \
+		_storage_area_store_##_name##_data = {                          \
+			.cb.move = _move,                                       \
+			.cb.move_cb = _move_cb,                                 \
+			.ready = false,                                         \
+	};                                                                      \
+	static const struct storage_area_store _storage_area_store_##_name =    \
+		storage_area_store(_area, _cookie, _cookie_size, _sector_size,  \
+				   _sector_cnt, _spare_sectors, _crc_skip,      \
+				   _wrap_cb,                                    \
+				   &(_storage_area_store_##_name##_data));
 
-#define get_storage_area_store(_name)						\
-	(struct storage_area_store *)&(_storage_area_store_ ## _name)
+#define get_storage_area_store(_name)                                           \
+	(struct storage_area_store *)&(_storage_area_store_##_name)
 
 /**
  * @}

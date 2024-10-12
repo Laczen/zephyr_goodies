@@ -18,15 +18,15 @@
  * defined with wrong properties, optionally the definition will be checked
  * by defining the Kconfig option `CONFIG_STORAGE_AREA_VERIFY` that is by
  * default enabled for `DEBUG`builds.
- * 
+ *
  *
  * There following methods area exposed:
- *   storage_area_read(), 	** read chunks **
+ *   storage_area_read(),	** read chunks **
  *   storage_area_dread(),	** read data direct **
  *   storage_area_prog(),	** program chunks **
  *   storage_area_dprog(),	** program data direct **
  *   storage_area_erase(),	** erase (in erase block addressing) **
- *   storage_area_ioctl() 	** used for e.g. getting xip addresses **
+ *   storage_area_ioctl()	** used for e.g. getting xip addresses **
  *
  * The subsystem is easy extendable to create custom (virtual) storage areas
  * that consist of e.g. a combination of flash and ram, a encrypted storage
@@ -34,8 +34,8 @@
  *
  * A storage area is defined e.g. for flash:
  * struct storage_area_flash fa =
- * 	flash_storage_area(dev, start, xip_address, write_size, erase_size,
- *                         size, properties);
+ *	flash_storage_area(dev, start, xip_address, write_size, erase_size,
+ *			   size, properties);
  * struct storage_area *area = &fa.area;
  *
  * For other storage devices (eeprom, ram, disk, ...) similar macros are
@@ -62,32 +62,32 @@ extern "C" {
 
 /**
  * @brief Storage_area interface
- * @defgroup Storage_area_interface Storage_area interface
- * @ingroup Storage
+ * @defgroup storage_area_interface Storage_area interface
+ * @ingroup storage_apis
  * @{
  */
 
 struct storage_area;
 
-struct storage_area_chunk {	/* storage area data chunk */
-	void *data;	/* pointer to data */
-	size_t len;	/* data length */
+struct storage_area_chunk { /* storage area data chunk */
+	void *data;         /* pointer to data */
+	size_t len;         /* data length */
 };
 
 enum storage_area_properties_mask {
 	SA_PROP_READONLY = 0x0001,
-	SA_PROP_FOVRWRITE = 0x0002,	/* full overwrite (ram, rram, ...) */
-	SA_PROP_LOVRWRITE = 0x0004,	/* limited overwrite (nor flash) */
-	SA_PROP_ZEROERASE = 0x0008,	/* erased value is 0x00 */
+	SA_PROP_FOVRWRITE = 0x0002, /* full overwrite (ram, rram, ...) */
+	SA_PROP_LOVRWRITE = 0x0004, /* limited overwrite (nor flash) */
+	SA_PROP_ZEROERASE = 0x0008, /* erased value is 0x00 */
 };
 
 enum storage_area_ioctl_cmd {
 	SA_IOCTL_NONE,
-	SA_IOCTL_XIPADDRESS,	/* retrieve the storage area xip address */
+	SA_IOCTL_XIPADDRESS, /* retrieve the storage area xip address */
 };
 
 /**
- * @brief Storage_area API
+ * @brief storage_area API
  *
  * API to access storage area.
  */
@@ -96,35 +96,34 @@ struct storage_area_api {
 		    const struct storage_area_chunk *ch, size_t cnt);
 	int (*prog)(const struct storage_area *area, size_t start,
 		    const struct storage_area_chunk *ch, size_t cnt);
-	int (*erase)(const struct storage_area *area, size_t start,
-		     size_t bcnt);
+	int (*erase)(const struct storage_area *area, size_t start, size_t bcnt);
 	int (*ioctl)(const struct storage_area *area,
-	             enum storage_area_ioctl_cmd cmd, void *data);
+		     enum storage_area_ioctl_cmd cmd, void *data);
 };
 
 /**
- * @brief Storage_area struct
+ * @brief storage_area struct
  */
 struct storage_area {
 	const struct storage_area_api *api;
 	size_t write_size;
 	size_t erase_size;
 	size_t erase_blocks;
-	uint32_t props;		/* bitfield of storage area properties */
+	uint32_t props; /* bitfield of storage area properties */
 };
 
 /**
- * @brief Storage_area macros
+ * @brief storage_area macros
  */
 #define STORAGE_AREA_HAS_PROPERTY(area, prop) ((area->props & prop) == prop)
-#define STORAGE_AREA_WRITESIZE(area) area->write_size
-#define STORAGE_AREA_ERASESIZE(area) area->erase_size
-#define STORAGE_AREA_SIZE(area) area->erase_size * area->erase_blocks
-#define STORAGE_AREA_FOVRWRITE(area)						\
+#define STORAGE_AREA_WRITESIZE(area)          area->write_size
+#define STORAGE_AREA_ERASESIZE(area)          area->erase_size
+#define STORAGE_AREA_SIZE(area)               area->erase_size * area->erase_blocks
+#define STORAGE_AREA_FOVRWRITE(area)                                            \
 	STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_FOVRWRITE)
-#define STORAGE_AREA_LOVRWRITE(area)						\
+#define STORAGE_AREA_LOVRWRITE(area)                                            \
 	STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_LOVRWRITE)
-#define STORAGE_AREA_ERASEVALUE(area)						\
+#define STORAGE_AREA_ERASEVALUE(area)                                           \
 	STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_ZEROERASE) ? 0x00 : 0xff
 
 /**
@@ -150,8 +149,8 @@ int storage_area_read(const struct storage_area *area, size_t start,
  *
  * @retval	0 on success else negative errno code.
  */
-int storage_area_dread(const struct storage_area *area, size_t start,
-		       void *data, size_t len);
+int storage_area_dread(const struct storage_area *area, size_t start, void *data,
+		       size_t len);
 
 /**
  * @brief	Program storage chunks.
@@ -192,7 +191,7 @@ int storage_area_erase(const struct storage_area *area, size_t start,
 		       size_t bcnt);
 
 /**
- * @brief 	Storage area ioctl.
+ * @brief	Storage area ioctl.
  *
  * @param area	storage area.
  * @param cmd	ioctl command.

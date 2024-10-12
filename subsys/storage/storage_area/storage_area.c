@@ -39,8 +39,7 @@ static size_t sa_chunk_size(const struct storage_area_chunk *ch, size_t cnt)
 int storage_area_read(const struct storage_area *area, size_t start,
 		      const struct storage_area_chunk *ch, size_t cnt)
 {
-	if ((area == NULL) || (area->api == NULL) ||
-	    (area->api->read == NULL)) {
+	if ((area == NULL) || (area->api == NULL) || (area->api->read == NULL)) {
 		return -ENOTSUP;
 	}
 
@@ -53,8 +52,8 @@ int storage_area_read(const struct storage_area *area, size_t start,
 	return area->api->read(area, start, ch, cnt);
 }
 
-int storage_area_dread(const struct storage_area *area, size_t start,
-		       void *data, size_t len)
+int storage_area_dread(const struct storage_area *area, size_t start, void *data,
+		       size_t len)
 {
 	struct storage_area_chunk rd = {
 		.data = data,
@@ -67,8 +66,7 @@ int storage_area_dread(const struct storage_area *area, size_t start,
 int storage_area_prog(const struct storage_area *area, size_t start,
 		      const struct storage_area_chunk *ch, size_t cnt)
 {
-	if ((area == NULL) || (area->api == NULL) ||
-	    (area->api->prog == NULL)) {
+	if ((area == NULL) || (area->api == NULL) || (area->api->prog == NULL)) {
 		return -ENOTSUP;
 	}
 

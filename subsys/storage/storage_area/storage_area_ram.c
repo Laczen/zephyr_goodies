@@ -62,7 +62,6 @@ static int sa_ram_prog(const struct storage_area *area, size_t start,
 			size_t wrlen = blen & ~(align - 1);
 
 			memcpy(rstart + start, data8, wrlen);
-			
 			blen -= wrlen;
 			data8 += wrlen;
 			start += wrlen;
@@ -84,11 +83,11 @@ static int sa_ram_erase(const struct storage_area *area, size_t start,
 		CONTAINER_OF(area, struct storage_area_ram, area);
 
 	start *= area->erase_size;
-	
+
 	for (size_t i = 0; i < len; i++) {
 		uint8_t *rstart = (uint8_t *)ram->start;
 		(void)memset(rstart + start, STORAGE_AREA_ERASEVALUE(area),
-		       	     area->erase_size);
+			     area->erase_size);
 		start += area->erase_size;
 	}
 
@@ -103,7 +102,7 @@ static int sa_ram_ioctl(const struct storage_area *area,
 
 	int rc = -ENOTSUP;
 
-	switch(cmd) {
+	switch (cmd) {
 	case SA_IOCTL_XIPADDRESS:
 		if (data == NULL) {
 			LOG_DBG("No return data supplied");

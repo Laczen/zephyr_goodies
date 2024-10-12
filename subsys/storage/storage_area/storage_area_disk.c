@@ -23,7 +23,7 @@ static int sa_disk_valid(const struct storage_area_disk *disk)
 	if (IS_ENABLED(CONFIG_STORAGE_AREA_VERIFY)) {
 		size_t scount;
 		size_t ssize;
-		
+
 		rc = disk_access_ioctl(disk->name, DISK_IOCTL_GET_SECTOR_COUNT,
 				       &scount);
 		if (rc != 0) {
@@ -62,7 +62,7 @@ static int sa_disk_valid(const struct storage_area_disk *disk)
 			return -EINVAL;
 		}
 	}
-	
+
 	return 0;
 }
 
@@ -71,7 +71,7 @@ static int sa_disk_read(const struct storage_area *area, size_t start,
 {
 	const struct storage_area_disk *disk =
 		CONTAINER_OF(area, struct storage_area_disk, area);
-	size_t starts =  start / disk->ssize;
+	size_t starts = start / disk->ssize;
 	size_t bpos = start % disk->ssize;
 	uint8_t buf[disk->ssize];
 	int rc = sa_disk_valid(disk);
@@ -92,14 +92,16 @@ static int sa_disk_read(const struct storage_area *area, size_t start,
 
 		while (blen != 0U) {
 			size_t cplen = MIN(blen, disk->ssize - bpos);
+
 			memcpy(data8, buf + bpos, cplen);
 			bpos += cplen;
 			blen -= cplen;
 			data8 += cplen;
-			
+
 			if (bpos == sizeof(buf)) {
 				starts++;
-				rc = disk_access_read(disk->name, buf, starts, 1U);
+				rc = disk_access_read(disk->name, buf, starts,
+						      1U);
 				if (rc != 0) {
 					break;
 				}
@@ -122,7 +124,7 @@ static int sa_disk_prog(const struct storage_area *area, size_t start,
 	const struct storage_area_disk *disk =
 		CONTAINER_OF(area, struct storage_area_disk, area);
 	const size_t align = area->write_size;
-	const size_t spws = align / disk->ssize; 
+	const size_t spws = align / disk->ssize;
 	uint8_t buf[align];
 	size_t bpos = 0U;
 	size_t starts = start / disk->ssize;
@@ -197,10 +199,10 @@ static int sa_disk_erase(const struct storage_area *area, size_t start,
 	if (rc != 0) {
 		goto end;
 	}
-	
+
 	memset(buf, STORAGE_AREA_ERASEVALUE(area), sizeof(buf));
 	starts += disk->start;
-	
+
 	for (size_t i = 0; i < len; i++) {
 		rc = disk_access_write(disk->name, buf, starts, spws);
 		if (rc != 0) {
@@ -223,13 +225,13 @@ static int sa_disk_ioctl(const struct storage_area *area,
 	const struct storage_area_disk *disk =
 		CONTAINER_OF(area, struct storage_area_disk, area);
 	int rc = sa_disk_valid(disk);
-	
+
 	if (rc != 0) {
 		goto end;
 	}
 
 	rc = -ENOTSUP;
-	switch(cmd) {
+	switch (cmd) {
 	default:
 		break;
 	}

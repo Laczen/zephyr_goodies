@@ -29,7 +29,7 @@ static int sa_eeprom_valid(const struct storage_area_eeprom *eeprom)
 			return -EINVAL;
 		}
 	}
-	
+
 	return 0;
 }
 
@@ -89,7 +89,8 @@ static int sa_eeprom_prog(const struct storage_area *area, size_t start,
 			data8 += cplen;
 
 			if (bpos == align) {
-				rc = eeprom_write(eeprom->dev, start, buf, align);
+				rc = eeprom_write(eeprom->dev, start, buf,
+						  align);
 				if (rc != 0) {
 					break;
 				}
@@ -136,11 +137,11 @@ static int sa_eeprom_erase(const struct storage_area *area, size_t start,
 	if (rc != 0) {
 		goto end;
 	}
-	
+
 	memset(buf, STORAGE_AREA_ERASEVALUE(area), sizeof(buf));
 	start *= area->erase_size;
 	start += eeprom->start;
-	
+
 	for (size_t i = 0; i < len; i++) {
 		rc = eeprom_write(eeprom->dev, start, buf, sizeof(buf));
 		if (rc != 0) {
@@ -163,13 +164,13 @@ static int sa_eeprom_ioctl(const struct storage_area *area,
 	const struct storage_area_eeprom *eeprom =
 		CONTAINER_OF(area, struct storage_area_eeprom, area);
 	int rc = sa_eeprom_valid(eeprom);
-	
+
 	if (rc != 0) {
 		goto end;
 	}
 
 	rc = -ENOTSUP;
-	switch(cmd) {
+	switch (cmd) {
 	default:
 		break;
 	}

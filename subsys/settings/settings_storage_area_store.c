@@ -181,44 +181,6 @@ static int settings_sas_load(struct settings_store *store,
 	return rc;
 }
 
-static int settings_sas_delete(const struct storage_area_store *sa_store,
-			       const char *name)
-{
-	const size_t nlen = strlen(name); 
-	struct storage_area_record record = {
-		.store = NULL,
-	};
-	int rc = 0;
-
-	while (storage_area_record_next(sa_store, &record) == 0) {
-		if ((sas_get_name_size(&record) == 0U) ||
-		    (sas_get_name_size(&record) < nlen)) {
-			continue;
-		}
-
-		char rname[nlen];
-
-		if (sas_get_name(&record, rname, nlen) != 0) {
-			continue;
-		}
-
-		if (memcmp(name, rname, nlen) != 0) {
-			continue;
-		}
-
-		rc = storage_area_record_fbupdate(&record, 0x0);
-		if (rc != 0) {
-			break;
-		}
-	}
-
-	if (rc != 0) {
-		LOG_DBG("fbupdate failed [%d]", rc);
-	}
-
-	return rc;
-}
-
 static int settings_sas_save(struct settings_store *store, const char *name,
 			     const char *value, size_t val_len)
 {
@@ -231,11 +193,6 @@ static int settings_sas_save(struct settings_store *store, const char *name,
 	}
 
 	const bool delete = ((value == NULL) || (val_len == 0));
-
-	if ((delete) && (settings_sas_delete(sa_store, name) == 0)) {
-		return 0;
-	}
-
 	uint8_t nsz = strlen(name);
 	struct storage_area_chunk wr[] = {
 		{

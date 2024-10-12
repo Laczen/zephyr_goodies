@@ -10,16 +10,16 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(storage_area_store, CONFIG_STORAGE_AREA_LOG_LEVEL);
 
-#define SAS_MAGIC	0xF0	/* record magic */
-#define SAS_HDRSIZE	4	/* magic + wrapcnt + size */
-#define SAS_CRCINIT	0
-#define SAS_CRCSIZE	4
-#define SAS_MINBUFSIZE	32
-#define SAS_FILLVALUE	0xFF
+#define SAS_MAGIC      0xF0 /* record magic */
+#define SAS_HDRSIZE    4    /* magic + wrapcnt + size */
+#define SAS_CRCINIT    0
+#define SAS_CRCSIZE    4
+#define SAS_MINBUFSIZE 32
+#define SAS_FILLVALUE  0xFF
 
-#define SAS_MIN(a, b) (a < b ? a : b)
-#define SAS_MAX(a, b) (a < b ? b : a)
-#define SAS_ALIGNUP(num, align) (((num) + ((align) - 1)) & ~((align) - 1))
+#define SAS_MIN(a, b)             (a < b ? a : b)
+#define SAS_MAX(a, b)             (a < b ? b : a)
+#define SAS_ALIGNUP(num, align)   (((num) + ((align) - 1)) & ~((align) - 1))
 #define SAS_ALIGNDOWN(num, align) ((num) & ~((align) - 1))
 
 static uint32_t get_le32(const uint8_t *buf)
@@ -119,7 +119,7 @@ static bool store_record_valid(const struct storage_area_record *record)
 {
 	const struct storage_area *area = record->store->area;
 	size_t rdoff = record->sector * record->store->sector_size;
-	size_t start = 0U;
+	size_t start = record->store->crc_skip;
 	uint32_t crc = SAS_CRCINIT;
 	uint8_t buf[SAS_MAX(SAS_MINBUFSIZE, area->write_size)];
 	struct storage_area_chunk rd = {
@@ -199,8 +199,8 @@ static int store_record_next_in_sector(struct storage_area_record *record,
 		}
 
 		size_t rsize = (size_t)get_le16(&buf[2]);
-		size_t asize = store->sector_size - rdloc - SAS_CRCSIZE -
-			       SAS_HDRSIZE;
+		size_t asize =
+			store->sector_size - rdloc - SAS_CRCSIZE - SAS_HDRSIZE;
 		bool size_ok = ((rsize > 0U) && (rsize < asize));
 
 		if (record->sector > data->sector) {
@@ -258,7 +258,8 @@ static int store_add_cookie(const struct storage_area_store *store)
 		{
 			.data = store->sector_cookie,
 			.len = cksize,
-		},{
+		},
+		{
 			.data = fill,
 			.len = sizeof(fill),
 		},
@@ -283,8 +284,7 @@ end:
 #endif /* CONFIG_STORAGE_AREA_STORE_READONLY */
 
 static int store_get_sector_cookie(const struct storage_area_store *store,
-				   uint16_t sector, void *cookie,
-				   size_t cksz)
+				   uint16_t sector, void *cookie, size_t cksz)
 {
 	const size_t off = sector * store->sector_size;
 	struct storage_area_chunk rd = {
@@ -338,6 +338,7 @@ static int store_erase_block(const struct storage_area_store *store)
 
 	size_t sblock = (data->sector * store->sector_size) / erase_size;
 	size_t bcnt = MAX(1U, store->sector_size / erase_size);
+
 	rc = storage_area_erase(area, sblock, bcnt);
 
 	if (rc != 0) {
@@ -400,12 +401,11 @@ static int store_move_record(struct storage_area_record *record)
 		.store = (struct storage_area_store *)store,
 		.sector = data->sector,
 		.loc = data->loc,
-		.size = record->size
-	};
+		.size = record->size};
 	const size_t rdoff = record->sector * sector_size + record->loc;
 	const size_t wroff = data->sector * sector_size + data->loc;
-	const size_t alsize = SAS_ALIGNUP(SAS_HDRSIZE + record->size +
-					  SAS_CRCSIZE, align);
+	const size_t alsize =
+		SAS_ALIGNUP(SAS_HDRSIZE + record->size + SAS_CRCSIZE, align);
 	uint8_t buf[SAS_MAX(SAS_MINBUFSIZE, align)];
 	struct storage_area_chunk rdwr = {
 		.data = buf,
@@ -550,16 +550,14 @@ static int store_recovery(const struct storage_area_store *store)
 
 	for (size_t loop = 0; loop < 2; loop++) {
 		size_t rscnt = 0U;
-		
+
 		while (((data->sector * sec_size) % erase_size) != 0U) {
 			store_reverse(store);
 			rscnt++;
-			
 		}
 
 		store_reverse(store);
 		rscnt++;
-		
 		if (loop != 0U) {
 			rc = store_compact(store);
 			break;
@@ -570,14 +568,15 @@ static int store_recovery(const struct storage_area_store *store)
 		};
 		size_t mrcnt = 0U; /* cnt records that should be moved */
 		size_t vrcnt = 0U; /* cnt records that are moved and valid */
-	
+
 		walk.sector = data->sector;
 		sector_advance(store, &walk.sector, store->spare_sectors + 1U);
 		for (size_t cnt = 0U; cnt < erase_size / sec_size; cnt++) {
 			walk.loc = 0U;
 			walk.size = 0U;
-			while (store_record_next_in_sector(&walk, true, true) == 0) {
-				if ((data->cb.move(&walk)) && 
+			while (store_record_next_in_sector(&walk, true, true) ==
+			       0) {
+				if ((data->cb.move(&walk)) &&
 				    (store_record_valid(&walk))) {
 					mrcnt++;
 				}
@@ -603,7 +602,8 @@ static int store_recovery(const struct storage_area_store *store)
 			walk.loc = 0U;
 			walk.size = 0U;
 			/* walk without recovery */
-			while (store_record_next_in_sector(&walk, true, false) == 0) {
+			while (store_record_next_in_sector(&walk, true, false) ==
+			       0) {
 				if (store_record_valid(&walk)) {
 					vrcnt++;
 				}
@@ -643,8 +643,7 @@ static int store_write(const struct storage_area_store *store,
 		       const struct storage_area_chunk *ch, size_t cnt)
 {
 	struct storage_area_store_data *data = store->data;
-	const size_t len = SAS_HDRSIZE + store_chunk_size(ch, cnt) +
-			   SAS_CRCSIZE;
+	const size_t len = SAS_HDRSIZE + store_chunk_size(ch, cnt) + SAS_CRCSIZE;
 
 	if ((store->sector_size - len) < data->loc) {
 		return -ENOSPC;
@@ -656,6 +655,7 @@ static int store_write(const struct storage_area_store *store,
 	uint8_t hbuf[SAS_HDRSIZE];
 	uint8_t cbuf[SAS_CRCSIZE + SAS_ALIGNUP(len, area->write_size) - len];
 	uint32_t crc = SAS_CRCINIT;
+	size_t crc_skip = store->crc_skip;
 	int rc;
 
 	hbuf[0] = SAS_MAGIC;
@@ -669,7 +669,17 @@ static int store_write(const struct storage_area_store *store,
 	for (size_t i = 1; i < (cnt + 1); i++) {
 		wr[i].data = ch[i - 1].data;
 		wr[i].len = ch[i - 1].len;
-		crc = crc32(crc, wr[i].data, wr[i].len);
+
+		if (crc_skip >= wr[i].len) {
+			crc_skip -= wr[i].len;
+			continue;
+		}
+
+		uint8_t *crc_data = (uint8_t *)wr[i].data;
+
+		crc_data += crc_skip;
+		crc = crc32(crc, crc_data, wr[i].len - crc_skip);
+		crc_skip = 0U;
 	}
 
 	put_le32(cbuf, crc);
@@ -835,6 +845,7 @@ int storage_area_record_read(const struct storage_area_record *record,
 	const struct storage_area_store *store = record->store;
 	const struct storage_area *area = store->area;
 	const size_t rdoff = record->sector * store->sector_size + record->loc;
+
 	return storage_area_read(area, start + rdoff + SAS_HDRSIZE, ch, cnt);
 }
 
@@ -849,50 +860,54 @@ int storage_area_record_dread(const struct storage_area_record *record,
 	return storage_area_record_read(record, start, &ch, 1U);
 }
 
-#ifdef CONFIG_STORAGE_AREA_STORE_DISABLEFBUPDATE
-int storage_area_record_fbupdate(const struct storage_area_record *record,
-			         uint8_t update)
-{
-	return -ENOTSUP;
-}
-#else
-int storage_area_record_fbupdate(const struct storage_area_record *record,
-			         uint8_t update)
+int storage_area_record_update(const struct storage_area_record *record,
+			       void *data, size_t len)
 {
 	const struct storage_area *area = record->store->area;
 	const size_t align = area->write_size;
 
-	if ((!STORAGE_AREA_FOVRWRITE(area)) &&
-	    (!STORAGE_AREA_LOVRWRITE(area))) {
+	if ((!STORAGE_AREA_FOVRWRITE(area)) && (!STORAGE_AREA_LOVRWRITE(area))) {
 		return -ENOTSUP;
 	}
 
-	if (!storage_area_record_valid(record)) {
+	if ((!storage_area_record_valid(record)) ||
+	    (record->store->crc_skip < len)) {
 		return -EINVAL;
 	}
 
 	const size_t sloc = record->sector * record->store->sector_size;
-	const size_t rloc = SAS_ALIGNDOWN(record->loc + SAS_HDRSIZE, align);
+	size_t astart = sloc + SAS_ALIGNDOWN(record->loc + SAS_HDRSIZE, align);
+	size_t start = sloc + record->loc + SAS_HDRSIZE;
+	uint8_t *data8 = (uint8_t *)data;
 	uint8_t buf[align];
-	struct storage_area_chunk ch = {
-		.data = buf,
-		.len = sizeof(buf),
-	};
-	int rc = storage_area_read(area, rloc + sloc, &ch, 1U);
-	
-	if (rc != 0) {
-		LOG_DBG("read failed at %x", rloc + sloc);
-		return rc;
+	int rc = 0;
+
+	while (len != 0U) {
+		const size_t wrlen = SAS_MIN(len, align - (start - astart));
+		struct storage_area_chunk ch = {
+			.data = buf,
+			.len = sizeof(buf),
+		};
+		
+		rc = storage_area_read(area, astart, &ch, 1U);
+		if (rc != 0) {
+			LOG_DBG("read failed at %x", astart);
+			break;
+		}
+		
+		memcpy(buf + (start - astart), data8, wrlen);
+		rc = storage_area_prog(area, astart, &ch, 1U);
+		if (rc != 0) {
+			LOG_DBG("prog failed at %x", astart);
+		}
+
+		len -= wrlen;
+		start += wrlen;
+		astart += align;
 	}
 
-	buf[record->loc + SAS_HDRSIZE - rloc] = update;
-	rc = storage_area_prog(area, rloc + sloc, &ch, 1U);
-	if (rc != 0) {
-		LOG_DBG("prog failed at %x", rloc + sloc);
-	}
 	return rc;
 }
-#endif /* CONFIG_STORAGE_AREA_STORE_DISABLEFBUPDATE */
 
 int storage_area_store_get_sector_cookie(const struct storage_area_store *store,
 					 size_t sector, void *cookie,
@@ -931,20 +946,20 @@ int storage_area_store_mount(const struct storage_area_store *store,
 		LOG_DBG("Sector size not a multiple of write block size");
 		return -EINVAL;
 	}
-	
+
 	if (((area->erase_size & (store->sector_size - 1)) != 0U) &&
 	    ((store->sector_size & (area->erase_size - 1)) != 0U)) {
 		LOG_DBG("Sector incorrectly sized");
 		return -EINVAL;
 	}
-	
+
 	if ((data->cb.move != NULL) &&
 	    ((store->spare_sectors * store->sector_size) < area->erase_size)) {
 		LOG_DBG("Not enough spare sectors");
 		return -EINVAL;
 	}
-	
-	if ((sa_size < st_size)) {
+
+	if (sa_size < st_size) {
 		LOG_DBG("Store does not fit area");
 		return -EINVAL;
 	}
@@ -972,6 +987,7 @@ int storage_area_store_mount(const struct storage_area_store *store,
 		}
 
 		const size_t rdoff = i * store->sector_size + record.loc + 1U;
+
 		if (storage_area_read(area, rdoff, &rd, 1U) != 0) {
 			continue;
 		}
@@ -999,8 +1015,9 @@ int storage_area_store_mount(const struct storage_area_store *store,
 	record.loc = 0U;
 	record.size = 0U;
 	while (store_record_next_in_sector(&record, true, true) == 0) {
-		loc = record.loc + SAS_ALIGNUP(SAS_HDRSIZE + record.size +
-					       SAS_CRCSIZE, area->write_size);
+		loc = record.loc +
+		      SAS_ALIGNUP(SAS_HDRSIZE + record.size + SAS_CRCSIZE,
+				  area->write_size);
 	}
 
 	data->loc = loc;

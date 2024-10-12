@@ -20,7 +20,7 @@ LOG_MODULE_REGISTER(sa_api_test);
 #define FLASH_AREA_OFFSET	DT_REG_ADDR(FLASH_AREA_NODE)
 #define FLASH_AREA_DEVICE							\
 	DEVICE_DT_GET(DT_MTD_FROM_FIXED_PARTITION(FLASH_AREA_NODE))
-#define FLASH_AREA_XIP		FLASH_AREA_OFFSET + 				\
+#define FLASH_AREA_XIP		FLASH_AREA_OFFSET +				\
 	DT_REG_ADDR(DT_MTD_FROM_FIXED_PARTITION(FLASH_AREA_NODE))
 #define AREA_SIZE		DT_REG_SIZE(FLASH_AREA_NODE)
 #define AREA_ERASE_SIZE		4096
@@ -59,7 +59,7 @@ const static struct storage_area_ram area = ram_storage_area(
 #define DISK_NAME	DT_PROP(DISK_NODE, disk_name)
 #define DISK_SSIZE	DT_PROP(DISK_NODE, sector_size)
 #define DISK_SCNT	DT_PROP(DISK_NODE, sector_count)
-#define AREA_SIZE 	DISK_SCNT * DISK_SSIZE / 2
+#define AREA_SIZE	DISK_SCNT * DISK_SSIZE / 2
 #define AREA_ERASE_SIZE	DISK_SSIZE
 #define AREA_WRITE_SIZE	DISK_SSIZE
 const static struct storage_area_disk area = disk_storage_area(
@@ -72,10 +72,13 @@ static void *storage_area_api_setup(void)
 	return NULL;
 }
 
-static void storage_area_api_before(void *)
+static void storage_area_api_before(void *fixture)
 {
+	ARG_UNUSED(fixture);
+
 	const struct storage_area *sa = &area.area;
 	int rc = storage_area_erase(sa, 0, 1);
+
 	zassert_equal(rc, 0, "erase returned [%d]", rc);
 }
 
@@ -133,8 +136,7 @@ ZTEST_USER(storage_area_api, test_read_write_blocks)
 	uint8_t wr[STORAGE_AREA_WRITESIZE(sa)];
 	uint8_t rd[STORAGE_AREA_WRITESIZE(sa)];
 	uint8_t fill[STORAGE_AREA_WRITESIZE(sa) - 1];
-	struct storage_area_chunk rd_chunk[] =
-	{
+	struct storage_area_chunk rd_chunk[] = {
 		{
 			.data = (void *)&magic,
 			.len = sizeof(magic),
@@ -144,8 +146,7 @@ ZTEST_USER(storage_area_api, test_read_write_blocks)
 			.len = sizeof(rd),
 		},
 	};
-	struct storage_area_chunk wr_chunk[] =
-	{
+	struct storage_area_chunk wr_chunk[] = {
 		{
 			.data = (void *)&magic,
 			.len = sizeof(magic),
@@ -181,7 +182,7 @@ ZTEST_USER(storage_area_api, test_ioctl)
 	uintptr_t xip;
 
 	int rc = storage_area_ioctl(sa, SA_IOCTL_XIPADDRESS, &xip);
-	
+
 	if ((IS_ENABLED(CONFIG_STORAGE_AREA_DISK)) ||
 	    (IS_ENABLED(CONFIG_STORAGE_AREA_EEPROM))) {
 		zassert_equal(rc, -ENOTSUP, "xip returned invalid address");

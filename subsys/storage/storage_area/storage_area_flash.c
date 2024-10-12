@@ -46,7 +46,7 @@ static int sa_flash_valid(const struct storage_area_flash *flash)
 				return -EINVAL;
 			}
 
-			if ((info.start_offset != off) || 
+			if ((info.start_offset != off) ||
 			    ((area->erase_size & (info.size - 1)) != 0)) {
 				LOG_DBG("Bad erase size");
 				return -EINVAL;
@@ -184,7 +184,7 @@ static int sa_flash_ioctl(const struct storage_area *area,
 	}
 
 	rc = -ENOTSUP;
-	switch(cmd) {
+	switch (cmd) {
 	case SA_IOCTL_XIPADDRESS:
 		if (data == NULL) {
 			LOG_DBG("No return data supplied");
