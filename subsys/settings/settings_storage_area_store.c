@@ -13,6 +13,8 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(settings_storage_area_store, CONFIG_SETTINGS_LOG_LEVEL);
 
+#define SASS_VALUE_BUF_SIZE	32
+
 struct settings_sas_read_fn_arg {
 	struct storage_area_record *record;
 	size_t dstart;
@@ -181,6 +183,55 @@ static int settings_sas_load(struct settings_store *store,
 	return rc;
 }
 
+static bool settings_sas_duplicate(const struct storage_area_store *sa_store,
+				   const char *name, const void *value,
+				   size_t val_len)
+{
+	const struct settings_load_arg load_arg = {
+		.subtree = name,
+	};
+	struct storage_area_record record = {
+		.store = NULL,
+	};
+	size_t dstart = 1U + strlen(name);
+	uint8_t *value8 = (uint8_t *)value;
+	uint8_t buf[SASS_VALUE_BUF_SIZE];
+	bool rv = false;
+
+	while (storage_area_record_next(sa_store, &record) == 0) {
+		if (settings_sas_skip(&record, &load_arg)) {
+			continue;
+		}
+
+		break;
+	}
+
+	if (val_len != (record.size - dstart)) {
+		goto end;
+	}
+
+	while (dstart < record.size) {
+		size_t rdsz = MIN(sizeof(buf), record.size - dstart);
+
+		if (storage_area_record_dread(&record, dstart, buf, rdsz) != 0) {
+			break;
+		}
+
+		if (memcmp(value8, buf, rdsz) != 0) {
+			break;
+		}
+
+		dstart += rdsz;
+		value8 += rdsz;
+	}
+
+	if (dstart == record.size) {
+		rv = true;
+	}
+end:
+	return rv;
+}
+
 static int settings_sas_save(struct settings_store *store, const char *name,
 			     const char *value, size_t val_len)
 {
@@ -192,7 +243,11 @@ static int settings_sas_save(struct settings_store *store, const char *name,
 		return -EINVAL;
 	}
 
-	const bool delete = ((value == NULL) || (val_len == 0));
+	val_len = (value == NULL) ? 0 : val_len;
+	if (settings_sas_duplicate(sa_store, name, value, val_len)) {
+		return 0;
+	}
+	
 	uint8_t nsz = strlen(name);
 	struct storage_area_chunk wr[] = {
 		{
@@ -202,8 +257,8 @@ static int settings_sas_save(struct settings_store *store, const char *name,
 			.data = (void *)name,
 			.len = nsz,
 		}, {
-			.data = (void *)(delete ? NULL : value),
-			.len = (delete ? 0 : val_len),
+			.data = (void *)(val_len == 0U ? NULL : value),
+			.len = val_len,
 		},
 	};
 	int rc = 0;

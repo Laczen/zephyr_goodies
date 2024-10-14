@@ -25,7 +25,7 @@ LOG_MODULE_REGISTER(sas_test);
 	DT_REG_ADDR(DT_MTD_FROM_FIXED_PARTITION(FLASH_AREA_NODE))
 #define AREA_SIZE		DT_REG_SIZE(FLASH_AREA_NODE)
 #define AREA_ERASE_SIZE		4096
-#define AREA_WRITE_SIZE		512
+#define AREA_WRITE_SIZE		8
 
 const static struct storage_area_flash area = flash_storage_area(
 	FLASH_AREA_DEVICE, FLASH_AREA_OFFSET, FLASH_AREA_XIP, AREA_WRITE_SIZE,
@@ -59,7 +59,7 @@ const char cookie[]="!NVS";
 #define SECTOR_SIZE 1024
 create_storage_area_store(test, &area.area, (void *)cookie, sizeof(cookie),
 			  SECTOR_SIZE, AREA_SIZE / SECTOR_SIZE,
-			  AREA_ERASE_SIZE / SECTOR_SIZE, NULL, NULL, NULL);
+			  AREA_ERASE_SIZE / SECTOR_SIZE, 0U, NULL, NULL, NULL);
 
 create_settings_storage_area_store(test, get_storage_area_store(test));
 
@@ -68,8 +68,10 @@ static void *settings_storage_area_store_api_setup(void)
 	return NULL;
 }
 
-static void settings_storage_area_store_api_before(void *)
+static void settings_storage_area_store_api_before(void *fixture)
 {
+	ARG_UNUSED(fixture);
+	
 	int rc = storage_area_erase(&area.area, 0, 1);
 
 	zassert_equal(rc, 0, "erase returned [%d]", rc);
@@ -109,6 +111,7 @@ ZTEST_USER(settings_storage_area_store_api, test_store)
 	rc = settings_load();
 	zassert_equal(rc, 0, "load returned [%d]", rc);
 
+	/* Save a value and see if it can be retrieved */
 	uint32_t val = 0x00C0FFEE;
 	rc = settings_save_one("data/val", &val, sizeof(val));
 	zassert_equal(rc, 0, "save one returned [%d]", rc);
@@ -119,6 +122,7 @@ ZTEST_USER(settings_storage_area_store_api, test_store)
 	zassert_equal(rc, 0, "load returned [%d]", rc);
 	zassert_equal(set_cnt, 1U, "loaded wrong settings count");
 
+	/* Save a second value and see if both can be retrieved */
 	rc = settings_save_one("data/test", &val, sizeof(val));
 	zassert_equal(rc, 0, "save one returned [%d]", rc);
 	storage_area_store_report_state("Save one", sstore->sa_store);
@@ -128,15 +132,7 @@ ZTEST_USER(settings_storage_area_store_api, test_store)
 	zassert_equal(rc, 0, "load returned [%d]", rc);
 	zassert_equal(set_cnt, 2U, "loaded wrong settings count");
 
-	rc = settings_save_one("data/test", &val, sizeof(val));
-	zassert_equal(rc, 0, "save one returned [%d]", rc);
-	storage_area_store_report_state("Save one", sstore->sa_store);
-
-	set_cnt = 0U;
-	rc = settings_load();
-	zassert_equal(rc, 0, "load returned [%d]", rc);
-	zassert_equal(set_cnt, 2U, "loaded wrong settings count");
-
+	/* Remove a value and check that it is removed */
 	rc = settings_delete("data/test");
 	zassert_equal(rc, 0, "delete returned [%d]", rc);
 	storage_area_store_report_state("Delete", sstore->sa_store);
@@ -145,20 +141,32 @@ ZTEST_USER(settings_storage_area_store_api, test_store)
 	rc = settings_load();
 	zassert_equal(rc, 0, "load returned [%d]", rc);
 	zassert_equal(set_cnt, 1U, "loaded wrong settings count");
+
+	/* Save the same key-value twice, and check that only one is added */
+	rc = settings_save_one("data/test", &val, sizeof(val));
+	zassert_equal(rc, 0, "save one returned [%d]", rc);
+
+	size_t loc = sstore->sa_store->data->loc;
+	rc = settings_save_one("data/test", &val, sizeof(val));
+	zassert_equal(rc, 0, "save one returned [%d]", rc);
+	zassert_equal(loc, sstore->sa_store->data->loc, "Wrong data loc");
 	
+	/* Add values until storage is wrapped, no data should be lost */
 	while (settings_save_one("data/test", &val, sizeof(val)) == 0) {
 	 	if (sstore->sa_store->data->wrapcnt != 1) {
 	 		break;
 	 	}
+
+		val++;
 	}
 
 	storage_area_store_report_state("Wrapped", sstore->sa_store);
-
 	set_cnt = 0U;
 	rc = settings_load();
 	zassert_equal(rc, 0, "load returned [%d]", rc);
 	zassert_equal(set_cnt, 2U, "loaded wrong settings count");
 
+	/* Unmount and automatic remount on load */
 	rc = storage_area_store_unmount(sstore->sa_store);
 	zassert_equal(rc, 0, "unmount returned [%d]", rc);
 
@@ -168,6 +176,7 @@ ZTEST_USER(settings_storage_area_store_api, test_store)
 	zassert_equal(set_cnt, 2U, "loaded wrong settings count");
 	storage_area_store_report_state("Remount", sstore->sa_store);
 
+	/* Add data with different handler and check load */
 	rc = settings_save_one("other/test", &val, sizeof(val));
 	zassert_equal(rc, 0, "save one returned [%d]", rc);
 	storage_area_store_report_state("Save one", sstore->sa_store);
@@ -177,11 +186,13 @@ ZTEST_USER(settings_storage_area_store_api, test_store)
 	zassert_equal(rc, 0, "load returned [%d]", rc);
 	zassert_equal(set_cnt, 3U, "loaded wrong settings count %d", set_cnt);
 
+	/* Check loading of subtree "data", should contain 2 entries */
 	set_cnt = 0U;
 	rc = settings_load_subtree("data");
 	zassert_equal(rc, 0, "load returned [%d]", rc);
 	zassert_equal(set_cnt, 2U, "loaded wrong settings count %d", set_cnt);
 
+	/* Check loading of subtree "other", should contain 1 entry */
 	set_cnt = 0U;
 	rc = settings_load_subtree("other");
 	zassert_equal(rc, 0, "load returned [%d]", rc);
