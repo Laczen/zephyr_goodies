@@ -57,8 +57,8 @@ static int sa_flash_valid(const struct storage_area_flash *flash)
 	return 0;
 }
 
-static int sa_flash_read(const struct storage_area *area, size_t start,
-			 const struct storage_area_chunk *ch, size_t cnt)
+static int sa_flash_readv(const struct storage_area *area, size_t start,
+			  const struct storage_area_iovec *iovec, size_t iovcnt)
 {
 	const struct storage_area_flash *flash =
 		CONTAINER_OF(area, struct storage_area_flash, area);
@@ -69,13 +69,13 @@ static int sa_flash_read(const struct storage_area *area, size_t start,
 	}
 
 	start += flash->start;
-	for (size_t i = 0U; i < cnt; i++) {
-		rc = flash_read(flash->dev, start, ch[i].data, ch[i].len);
+	for (size_t i = 0U; i < iovcnt; i++) {
+		rc = flash_read(flash->dev, start, iovec[i].data, iovec[i].len);
 		if (rc != 0) {
 			break;
 		}
 
-		start += ch[i].len;
+		start += iovec[i].len;
 	}
 
 	if (rc != 0) {
@@ -85,8 +85,44 @@ end:
 	return rc;
 }
 
-static int sa_flash_prog(const struct storage_area *area, size_t start,
-			 const struct storage_area_chunk *ch, size_t cnt)
+static int sa_flash_write(const struct storage_area_flash *flash, size_t start,
+			  const uint8_t *data, size_t len)
+{
+	const struct storage_area *area = &flash->area;
+
+	if ((!STORAGE_AREA_AUTOERASE(area)) ||
+	    (STORAGE_AREA_FOVRWRITE(area))) {
+		return flash_write(flash->dev, flash->start + start, data, len);
+	}
+
+	int rc = 0;
+
+	while (len != 0U) {
+		const size_t esz = area->erase_size;
+		const size_t wrlen = MIN(esz - (start & (esz - 1)), len);
+
+		if ((start & (esz - 1)) == 0U) {
+			rc = flash_erase(flash->dev, flash->start + start, esz);
+			if (rc != 0) {
+				break;
+			}
+		}
+
+		rc = flash_write(flash->dev, flash->start + start, data, wrlen);
+		if (rc != 0) {
+			break;
+		}
+
+		data += wrlen;
+		len -= wrlen;
+	}
+
+	return rc;
+}
+
+static int sa_flash_writev(const struct storage_area *area, size_t start,
+			   const struct storage_area_iovec *iovec,
+			   size_t iovcnt)
 {
 	const struct storage_area_flash *flash =
 		CONTAINER_OF(area, struct storage_area_flash, area);
@@ -99,10 +135,9 @@ static int sa_flash_prog(const struct storage_area *area, size_t start,
 		goto end;
 	}
 
-	start += flash->start;
-	for (size_t i = 0U; i < cnt; i++) {
-		uint8_t *data8 = (uint8_t *)ch[i].data;
-		size_t blen = ch[i].len;
+	for (size_t i = 0U; i < iovcnt; i++) {
+		uint8_t *data8 = (uint8_t *)iovec[i].data;
+		size_t blen = iovec[i].len;
 
 		if (bpos != 0U) {
 			size_t cplen = MIN(blen, align - bpos);
@@ -113,7 +148,7 @@ static int sa_flash_prog(const struct storage_area *area, size_t start,
 			data8 += cplen;
 
 			if (bpos == align) {
-				rc = flash_write(flash->dev, start, buf, align);
+				rc = sa_flash_write(flash, start, buf, align);
 				if (rc != 0) {
 					break;
 				}
@@ -126,7 +161,7 @@ static int sa_flash_prog(const struct storage_area *area, size_t start,
 		if (blen >= align) {
 			size_t wrlen = blen & ~(align - 1);
 
-			rc = flash_write(flash->dev, start, data8, wrlen);
+			rc = sa_flash_write(flash, start, data8, wrlen);
 			if (rc != 0) {
 				break;
 			}
@@ -210,8 +245,8 @@ end:
 }
 
 const struct storage_area_api storage_area_flash_api = {
-	.read = sa_flash_read,
-	.prog = sa_flash_prog,
+	.readv = sa_flash_readv,
+	.writev = sa_flash_writev,
 	.erase = sa_flash_erase,
 	.ioctl = sa_flash_ioctl,
 };

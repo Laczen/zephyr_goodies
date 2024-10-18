@@ -17,16 +17,15 @@ LOG_MODULE_REGISTER(sas_test);
 
 #ifdef CONFIG_STORAGE_AREA_FLASH
 #include <zephyr/storage/storage_area/storage_area_flash.h>
-#define FLASH_AREA_NODE   DT_NODELABEL(storage_partition)
-#define FLASH_AREA_OFFSET DT_REG_ADDR(FLASH_AREA_NODE)
-#define FLASH_AREA_DEVICE                                                       \
+#define FLASH_AREA_NODE		DT_NODELABEL(storage_partition)
+#define FLASH_AREA_OFFSET	DT_REG_ADDR(FLASH_AREA_NODE)
+#define FLASH_AREA_DEVICE							\
 	DEVICE_DT_GET(DT_MTD_FROM_FIXED_PARTITION(FLASH_AREA_NODE))
-#define FLASH_AREA_XIP                                                          \
-	FLASH_AREA_OFFSET +                                                     \
-		DT_REG_ADDR(DT_MTD_FROM_FIXED_PARTITION(FLASH_AREA_NODE))
-#define AREA_SIZE       DT_REG_SIZE(FLASH_AREA_NODE)
-#define AREA_ERASE_SIZE 4096
-#define AREA_WRITE_SIZE 8
+#define FLASH_AREA_XIP		FLASH_AREA_OFFSET +				\
+	DT_REG_ADDR(DT_MTD_FROM_FIXED_PARTITION(FLASH_AREA_NODE))
+#define AREA_SIZE		DT_REG_SIZE(FLASH_AREA_NODE)
+#define AREA_ERASE_SIZE		4096
+#define AREA_WRITE_SIZE		8
 
 const static struct storage_area_flash area = flash_storage_area(
 	FLASH_AREA_DEVICE, FLASH_AREA_OFFSET, FLASH_AREA_XIP, AREA_WRITE_SIZE,
@@ -35,11 +34,11 @@ const static struct storage_area_flash area = flash_storage_area(
 
 #ifdef CONFIG_STORAGE_AREA_EEPROM
 #include <zephyr/storage/storage_area/storage_area_eeprom.h>
-#define EEPROM_NODE        DT_ALIAS(eeprom_0)
-#define EEPROM_AREA_DEVICE DEVICE_DT_GET(EEPROM_NODE)
-#define AREA_SIZE          DT_PROP(EEPROM_NODE, size)
-#define AREA_ERASE_SIZE    4096
-#define AREA_WRITE_SIZE    4
+#define EEPROM_NODE		DT_ALIAS(eeprom_0)
+#define EEPROM_AREA_DEVICE	DEVICE_DT_GET(EEPROM_NODE)
+#define AREA_SIZE		DT_PROP(EEPROM_NODE, size)
+#define AREA_ERASE_SIZE		4096
+#define AREA_WRITE_SIZE		4
 
 const static struct storage_area_eeprom area = eeprom_storage_area(
 	EEPROM_AREA_DEVICE, 0U, AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE, 0);
@@ -47,26 +46,26 @@ const static struct storage_area_eeprom area = eeprom_storage_area(
 
 #ifdef CONFIG_STORAGE_AREA_RAM
 #include <zephyr/storage/storage_area/storage_area_ram.h>
-#define RAM_NODE        DT_NODELABEL(storage_sram)
-#define AREA_SIZE       DT_REG_SIZE(RAM_NODE)
-#define AREA_ERASE_SIZE 4096
-#define AREA_WRITE_SIZE 4
+#define RAM_NODE		DT_NODELABEL(storage_sram)
+#define AREA_SIZE		DT_REG_SIZE(RAM_NODE)
+#define AREA_ERASE_SIZE		4096
+#define AREA_WRITE_SIZE		4
 const static struct storage_area_ram area = ram_storage_area(
 	DT_REG_ADDR(RAM_NODE), AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE, 0);
 #endif /* CONFIG_STORAGE_AREA_RAM */
 
 #ifdef CONFIG_STORAGE_AREA_DISK
 #include <zephyr/storage/storage_area/storage_area_disk.h>
-#define DISK_NODE       DT_NODELABEL(ramdisk0)
-#define DISK_NAME       DT_PROP(DISK_NODE, disk_name)
-#define DISK_SSIZE      DT_PROP(DISK_NODE, sector_size)
-#define DISK_SCNT       DT_PROP(DISK_NODE, sector_count)
-#define AREA_SIZE       DISK_SCNT *DISK_SSIZE / 2
-#define AREA_ERASE_SIZE 4096
-#define AREA_WRITE_SIZE DISK_SSIZE
-const static struct storage_area_disk area =
-	disk_storage_area(DISK_NAME, DISK_SCNT / 2, DISK_SSIZE, AREA_WRITE_SIZE,
-			  AREA_ERASE_SIZE, AREA_SIZE, 0);
+#define DISK_NODE	DT_NODELABEL(ramdisk0)
+#define DISK_NAME	DT_PROP(DISK_NODE, disk_name)
+#define DISK_SSIZE	DT_PROP(DISK_NODE, sector_size)
+#define DISK_SCNT	DT_PROP(DISK_NODE, sector_count)
+#define AREA_SIZE	DISK_SCNT * DISK_SSIZE / 2
+#define AREA_ERASE_SIZE	4096
+#define AREA_WRITE_SIZE	DISK_SSIZE
+const static struct storage_area_disk area = disk_storage_area(
+	DISK_NAME, DISK_SCNT / 2, DISK_SSIZE, AREA_WRITE_SIZE, AREA_ERASE_SIZE,
+	AREA_SIZE, 0);
 #endif /* CONFIG_STORAGE_AREA_DISK */
 
 static const char cookie[] = "!NVS";
@@ -75,7 +74,7 @@ bool move(const struct storage_area_record *record)
 {
 	uint8_t nsz;
 
-	if (storage_area_record_dread(record, 0U, &nsz, sizeof(nsz)) != 0) {
+	if (storage_area_record_read(record, 0U, &nsz, sizeof(nsz)) != 0) {
 		return false;
 	}
 
@@ -85,7 +84,7 @@ bool move(const struct storage_area_record *record)
 
 	char name[nsz];
 
-	if (storage_area_record_dread(record, sizeof(nsz), &name, nsz) != 0) {
+	if (storage_area_record_read(record, sizeof(nsz), &name, nsz) != 0) {
 		return false;
 	}
 
@@ -104,7 +103,7 @@ bool move(const struct storage_area_record *record)
 			break;
 		}
 
-		rc = storage_area_record_dread(&walk, 0U, &nsz, sizeof(nsz));
+		rc = storage_area_record_read(&walk, 0U, &nsz, sizeof(nsz));
 		if (rc != 0) {
 			break;
 		}
@@ -115,7 +114,7 @@ bool move(const struct storage_area_record *record)
 
 		char wname[nsz];
 
-		rc = storage_area_record_dread(&walk, sizeof(nsz), wname, nsz);
+		rc = storage_area_record_read(&walk, sizeof(nsz), wname, nsz);
 		if (rc != 0) {
 			break;
 		}
@@ -174,20 +173,22 @@ int write_data(const struct storage_area_store *store, char *name,
 	       uint32_t value)
 {
 	uint8_t nsz = strlen(name);
-	struct storage_area_chunk wr[] = {{
-						  .data = &nsz,
-						  .len = sizeof(nsz),
-					  },
-					  {
-						  .data = name,
-						  .len = nsz,
-					  },
-					  {
-						  .data = &value,
-						  .len = sizeof(uint32_t),
-					  }};
+	struct storage_area_iovec wr[] = {
+		{
+			.data = &nsz,
+			.len = sizeof(nsz),
+		},
+		{
+			.data = name,
+			.len = nsz,
+		},
+		{
+			.data = &value,
+			.len = sizeof(uint32_t),
+		}
+	};
 
-	return storage_area_store_write(store, wr, ARRAY_SIZE(wr));
+	return storage_area_store_writev(store, wr, ARRAY_SIZE(wr));
 }
 
 int read_data(const struct storage_area_store *store, char *name,
@@ -201,7 +202,7 @@ int read_data(const struct storage_area_store *store, char *name,
 	while (storage_area_record_next(store, &walk) == 0) {
 		uint8_t nlen;
 
-		rc = storage_area_record_dread(&walk, 0U, &nlen, sizeof(nlen));
+		rc = storage_area_record_read(&walk, 0U, &nlen, sizeof(nlen));
 		if (rc != 0) {
 			break;
 		}
@@ -212,7 +213,7 @@ int read_data(const struct storage_area_store *store, char *name,
 
 		char rdname[nlen];
 
-		rc = storage_area_record_dread(&walk, 1U, rdname, nlen);
+		rc = storage_area_record_read(&walk, 1U, rdname, nlen);
 		if (rc != 0) {
 			break;
 		}
@@ -230,8 +231,7 @@ int read_data(const struct storage_area_store *store, char *name,
 		goto end;
 	}
 
-	rc = storage_area_record_dread(&match, 1U + nsz, value,
-				       sizeof(uint32_t));
+	rc = storage_area_record_read(&match, 1U + nsz, value, sizeof(uint32_t));
 end:
 	return rc;
 }
@@ -282,6 +282,7 @@ ZTEST_USER(storage_area_store_api, test_store)
 	wvalue2 = 0U;
 	for (int i = 0; i < store->sector_cnt; i++) {
 		while (write_data(store, "data2", wvalue2) == 0) {
+
 		}
 		storage_area_store_report_state("Write", store);
 		rc = storage_area_store_compact(store);
@@ -304,7 +305,7 @@ ZTEST_USER(storage_area_store_api, test_store)
 	wroff = store->data->sector * store->sector_size + store->data->loc;
 	wroff -= STORAGE_AREA_WRITESIZE(store->area);
 	memset(bad, 0x0, sizeof(bad));
-	rc = storage_area_dprog(store->area, wroff, bad, sizeof(bad));
+	rc = storage_area_write(store->area, wroff, bad, sizeof(bad));
 	zassert_equal(rc, 0, "dprog failed [%d]", rc);
 
 	rc = storage_area_store_mount(store, NULL);

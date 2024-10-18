@@ -12,24 +12,24 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(storage_area_ram, CONFIG_STORAGE_AREA_LOG_LEVEL);
 
-static int sa_ram_read(const struct storage_area *area, size_t start,
-		       const struct storage_area_chunk *ch, size_t cnt)
+static int sa_ram_readv(const struct storage_area *area, size_t start,
+			const struct storage_area_iovec *iovec, size_t iovcnt)
 {
 	const struct storage_area_ram *ram =
 		CONTAINER_OF(area, struct storage_area_ram, area);
 	const uint8_t *rstart = (uint8_t *)ram->start;
 
-	for (size_t i = 0U; i < cnt; i++) {
+	for (size_t i = 0U; i < iovcnt; i++) {
 
-		memcpy(ch[i].data, rstart + start, ch[i].len);
-		start += ch[i].len;
+		memcpy(iovec[i].data, rstart + start, iovec[i].len);
+		start += iovec[i].len;
 	}
 
 	return 0;
 }
 
-static int sa_ram_prog(const struct storage_area *area, size_t start,
-		       const struct storage_area_chunk *ch, size_t cnt)
+static int sa_ram_writev(const struct storage_area *area, size_t start,
+			 const struct storage_area_iovec *iovec, size_t iovcnt)
 {
 	const struct storage_area_ram *ram =
 		CONTAINER_OF(area, struct storage_area_ram, area);
@@ -39,9 +39,9 @@ static int sa_ram_prog(const struct storage_area *area, size_t start,
 	size_t bpos = 0U;
 	int rc = 0;
 
-	for (size_t i = 0U; i < cnt; i++) {
-		uint8_t *data8 = (uint8_t *)ch[i].data;
-		size_t blen = ch[i].len;
+	for (size_t i = 0U; i < iovcnt; i++) {
+		uint8_t *data8 = (uint8_t *)iovec[i].data;
+		size_t blen = iovec[i].len;
 
 		if (bpos != 0U) {
 			size_t cplen = MIN(blen, align - bpos);
@@ -123,8 +123,8 @@ static int sa_ram_ioctl(const struct storage_area *area,
 }
 
 const struct storage_area_api storage_area_ram_api = {
-	.read = sa_ram_read,
-	.prog = sa_ram_prog,
+	.readv = sa_ram_readv,
+	.writev = sa_ram_writev,
 	.erase = sa_ram_erase,
 	.ioctl = sa_ram_ioctl,
 };

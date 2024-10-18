@@ -33,8 +33,8 @@ static int sa_eeprom_valid(const struct storage_area_eeprom *eeprom)
 	return 0;
 }
 
-static int sa_eeprom_read(const struct storage_area *area, size_t start,
-			  const struct storage_area_chunk *ch, size_t cnt)
+static int sa_eeprom_readv(const struct storage_area *area, size_t start,
+			   const struct storage_area_iovec *iovec, size_t iovcnt)
 {
 	const struct storage_area_eeprom *eeprom =
 		CONTAINER_OF(area, struct storage_area_eeprom, area);
@@ -45,24 +45,26 @@ static int sa_eeprom_read(const struct storage_area *area, size_t start,
 	}
 
 	start += eeprom->start;
-	for (size_t i = 0U; i < cnt; i++) {
-		rc = eeprom_read(eeprom->dev, start, ch[i].data, ch[i].len);
+	for (size_t i = 0U; i < iovcnt; i++) {
+		rc = eeprom_read(eeprom->dev, start, iovec[i].data,
+				 iovec[i].len);
 		if (rc != 0) {
 			break;
 		}
 
-		start += ch[i].len;
+		start += iovec[i].len;
 	}
 
 	if (rc != 0) {
-		LOG_DBG("read failed at %x", start);
+		LOG_DBG("read failed at %x", start - eeprom->start);
 	}
 end:
 	return rc;
 }
 
-static int sa_eeprom_prog(const struct storage_area *area, size_t start,
-			  const struct storage_area_chunk *ch, size_t cnt)
+static int sa_eeprom_writev(const struct storage_area *area, size_t start,
+			    const struct storage_area_iovec *iovec,
+			    size_t iovcnt)
 {
 	const struct storage_area_eeprom *eeprom =
 		CONTAINER_OF(area, struct storage_area_eeprom, area);
@@ -76,9 +78,9 @@ static int sa_eeprom_prog(const struct storage_area *area, size_t start,
 	}
 
 	start += eeprom->start;
-	for (size_t i = 0U; i < cnt; i++) {
-		uint8_t *data8 = (uint8_t *)ch[i].data;
-		size_t blen = ch[i].len;
+	for (size_t i = 0U; i < iovcnt; i++) {
+		uint8_t *data8 = (uint8_t *)iovec[i].data;
+		size_t blen = iovec[i].len;
 
 		if (bpos != 0U) {
 			size_t cplen = MIN(blen, align - bpos);
@@ -120,7 +122,7 @@ static int sa_eeprom_prog(const struct storage_area *area, size_t start,
 	}
 
 	if (rc != 0) {
-		LOG_DBG("prog failed at %x", start);
+		LOG_DBG("write failed at %x", start - eeprom->start);
 	}
 end:
 	return rc;
@@ -152,7 +154,7 @@ static int sa_eeprom_erase(const struct storage_area *area, size_t start,
 	}
 
 	if (rc != 0) {
-		LOG_DBG("prog failed at %x", start);
+		LOG_DBG("write failed at %x", start - eeprom->start);
 	}
 end:
 	return rc;
@@ -179,8 +181,8 @@ end:
 }
 
 const struct storage_area_api storage_area_eeprom_api = {
-	.read = sa_eeprom_read,
-	.prog = sa_eeprom_prog,
+	.readv = sa_eeprom_readv,
+	.writev = sa_eeprom_writev,
 	.erase = sa_eeprom_erase,
 	.ioctl = sa_eeprom_ioctl,
 };

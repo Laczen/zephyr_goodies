@@ -25,52 +25,53 @@ static bool sa_range_valid(const struct storage_area *area, size_t start,
 	return true;
 }
 
-static size_t sa_chunk_size(const struct storage_area_chunk *ch, size_t cnt)
+static size_t sa_iovec_size(const struct storage_area_iovec *iovec,
+			    size_t iovcnt)
 {
 	size_t rv = 0U;
 
-	for (size_t i = 0U; i < cnt; i++) {
-		rv += ch[i].len;
+	for (size_t i = 0U; i < iovcnt; i++) {
+		rv += iovec[i].len;
 	}
 
 	return rv;
 }
 
-int storage_area_read(const struct storage_area *area, size_t start,
-		      const struct storage_area_chunk *ch, size_t cnt)
+int storage_area_readv(const struct storage_area *area, size_t start,
+		       const struct storage_area_iovec *iovec, size_t iovcnt)
 {
-	if ((area == NULL) || (area->api == NULL) || (area->api->read == NULL)) {
+	if ((area == NULL) || (area->api == NULL) || (area->api->readv == NULL)) {
 		return -ENOTSUP;
 	}
 
-	const size_t len = sa_chunk_size(ch, cnt);
+	const size_t len = sa_iovec_size(iovec, iovcnt);
 
 	if (!sa_range_valid(area, start, len)) {
 		return -EINVAL;
 	}
 
-	return area->api->read(area, start, ch, cnt);
+	return area->api->readv(area, start, iovec, iovcnt);
 }
 
-int storage_area_dread(const struct storage_area *area, size_t start, void *data,
-		       size_t len)
+int storage_area_read(const struct storage_area *area, size_t start, void *data,
+		      size_t len)
 {
-	struct storage_area_chunk rd = {
+	struct storage_area_iovec rd = {
 		.data = data,
 		.len = len,
 	};
 
-	return storage_area_read(area, start, &rd, 1U);
+	return storage_area_readv(area, start, &rd, 1U);
 }
 
-int storage_area_prog(const struct storage_area *area, size_t start,
-		      const struct storage_area_chunk *ch, size_t cnt)
+int storage_area_writev(const struct storage_area *area, size_t start,
+			const struct storage_area_iovec *iovec, size_t iovcnt)
 {
-	if ((area == NULL) || (area->api == NULL) || (area->api->prog == NULL)) {
+	if ((area == NULL) || (area->api == NULL) || (area->api->writev == NULL)) {
 		return -ENOTSUP;
 	}
 
-	const size_t len = sa_chunk_size(ch, cnt);
+	const size_t len = sa_iovec_size(iovec, iovcnt);
 
 	if ((!sa_range_valid(area, start, len)) ||
 	    (((len & (area->write_size - 1)) != 0U))) {
@@ -82,18 +83,18 @@ int storage_area_prog(const struct storage_area *area, size_t start,
 		return -EROFS;
 	}
 
-	return area->api->prog(area, start, ch, cnt);
+	return area->api->writev(area, start, iovec, iovcnt);
 }
 
-int storage_area_dprog(const struct storage_area *area, size_t start,
+int storage_area_write(const struct storage_area *area, size_t start,
 		       const void *data, size_t len)
 {
-	struct storage_area_chunk wr = {
+	struct storage_area_iovec wr = {
 		.data = (void *)data,
 		.len = len,
 	};
 
-	return storage_area_prog(area, start, &wr, 1U);
+	return storage_area_writev(area, start, &wr, 1U);
 }
 
 int storage_area_erase(const struct storage_area *area, size_t start,

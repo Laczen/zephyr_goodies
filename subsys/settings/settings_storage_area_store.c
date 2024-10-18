@@ -26,8 +26,8 @@ static ssize_t settings_sas_read_fn(void *back_end, void *data, size_t len)
 		(struct settings_sas_read_fn_arg *)back_end;
 	ssize_t rc;
 
-	rc = storage_area_record_dread(rd_fn_arg->record, rd_fn_arg->dstart,
-				       data, len);
+	rc = storage_area_record_read(rd_fn_arg->record, rd_fn_arg->dstart,
+				      data, len);
 	return rc == 0 ? (ssize_t)len : (ssize_t)rc;
 }
 
@@ -35,7 +35,7 @@ static uint8_t sas_get_name_size(const struct storage_area_record *record)
 {
 	uint8_t rv = 0;
 
-	if (storage_area_record_dread(record, 0U, &rv, sizeof(rv)) != 0) {
+	if (storage_area_record_read(record, 0U, &rv, sizeof(rv)) != 0) {
 		return 0;
 	}
 
@@ -45,7 +45,7 @@ static uint8_t sas_get_name_size(const struct storage_area_record *record)
 static int sas_get_name(const struct storage_area_record *record, char *name,
 			size_t nsz)
 {
-	return storage_area_record_dread(record, 1U, name, nsz);
+	return storage_area_record_read(record, 1U, name, nsz);
 }
 
 static bool settings_sas_skip(const struct storage_area_record *record,
@@ -213,7 +213,7 @@ static bool settings_sas_duplicate(const struct storage_area_store *sa_store,
 	while (dstart < record.size) {
 		size_t rdsz = MIN(sizeof(buf), record.size - dstart);
 
-		if (storage_area_record_dread(&record, dstart, buf, rdsz) != 0) {
+		if (storage_area_record_read(&record, dstart, buf, rdsz) != 0) {
 			break;
 		}
 
@@ -249,7 +249,7 @@ static int settings_sas_save(struct settings_store *store, const char *name,
 	}
 	
 	uint8_t nsz = strlen(name);
-	struct storage_area_chunk wr[] = {
+	struct storage_area_iovec wr[] = {
 		{
 			.data = (void *)&nsz,
 			.len = sizeof(nsz),
@@ -264,7 +264,7 @@ static int settings_sas_save(struct settings_store *store, const char *name,
 	int rc = 0;
 
 	for (size_t i = 0; i < sa_store->sector_cnt; i++) {
-		rc = storage_area_store_write(sa_store, wr, ARRAY_SIZE(wr));
+		rc = storage_area_store_writev(sa_store, wr, ARRAY_SIZE(wr));
 		if ((rc == 0) || (rc != -ENOSPC)) {
 			break;
 		}

@@ -77,8 +77,8 @@ static int producer(const struct storage_area_store *store)
 		};
 
 		while (true) {
-			rc = storage_area_store_dwrite(store, &data,
-						       sizeof(data));
+			rc = storage_area_store_write(store, &data,
+						      sizeof(data));
 			if (rc == -ENOSPC) {
 				LOG_INF("Added before advance [%d]", rcount);
 				/* Not doing any copy for keeping records */
@@ -110,7 +110,7 @@ static int consumer(const struct storage_area_store *store)
 	while (storage_area_record_next(store, &walk) == 0) {
 		struct data_format data;
 
-		rc = storage_area_record_dread(&walk, 0U, &data, sizeof(data));
+		rc = storage_area_record_read(&walk, 0U, &data, sizeof(data));
 		if (rc != 0) {
 			break;
 		}

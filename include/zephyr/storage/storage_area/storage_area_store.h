@@ -88,7 +88,7 @@ struct storage_area_store {
 	size_t sector_size;
 	size_t sector_cnt;
 	size_t spare_sectors;
-	/* crc_skip determines the data that is skipped for the
+	/* crc_skip defines how many data bytes are skipped in the
 	 * crc calculation.
 	 */
 	size_t crc_skip;
@@ -136,19 +136,20 @@ int storage_area_store_unmount(const struct storage_area_store *store);
 int storage_area_store_wipe(const struct storage_area_store *store);
 
 /**
- * @brief	Write data to storage area store.
+ * @brief	Write iovec to storage area store.
  *
- * @param store	storage area store.
- * @param ch	data chunk (see storage_area_chunk).
- * @param cnt	chunk count.
+ * @param store	 storage area store.
+ * @param iovec	 io vector to write (see storage_area_iovec).
+ * @param iovcnt iovec elements.
  *
  * @retval	0 on success else negative errno code.
  */
-int storage_area_store_write(const struct storage_area_store *store,
-			     const struct storage_area_chunk *ch, size_t cnt);
+int storage_area_store_writev(const struct storage_area_store *store,
+			      const struct storage_area_iovec *iovec,
+			      size_t iovcnt);
 
 /**
- * @brief	Direct write data to storage area store.
+ * @brief	Write data to storage area store.
  *
  * @param store	storage area store.
  * @param data	data.
@@ -156,8 +157,8 @@ int storage_area_store_write(const struct storage_area_store *store,
  *
  * @retval	0 on success else negative errno code.
  */
-int storage_area_store_dwrite(const struct storage_area_store *store,
-			      const void *data, size_t len);
+int storage_area_store_write(const struct storage_area_store *store,
+			     const void *data, size_t len);
 
 /**
  * @brief	Advance storage area store.
@@ -204,18 +205,19 @@ int storage_area_record_next(const struct storage_area_store *store,
 bool storage_area_record_valid(const struct storage_area_record *record);
 
 /**
- * @brief	 Read data from a record
+ * @brief	 Read iovec from a record
  *
  * @param record storage area record.
  * @param start  offset in the record (data).
- * @param ch	 data chunk.
- * @param cnt	 chunk count.
+ * @param iovec	 io vector to read (see storage_area_iovec).
+ * @param iovcnt iovec elements.
  *
  * @retval	 0 on success else negative errno code.
  */
-int storage_area_record_read(const struct storage_area_record *record,
-			     size_t start, const struct storage_area_chunk *ch,
-			     size_t cnt);
+int storage_area_record_readv(const struct storage_area_record *record,
+			      size_t start,
+			      const struct storage_area_iovec *iovec,
+			      size_t iovcnt);
 
 /**
  * @brief	 Direct data read from a record
@@ -227,8 +229,8 @@ int storage_area_record_read(const struct storage_area_record *record,
  *
  * @retval	 0 on success else negative errno code.
  */
-int storage_area_record_dread(const struct storage_area_record *record,
-			      size_t start, void *data, size_t len);
+int storage_area_record_read(const struct storage_area_record *record,
+			     size_t start, void *data, size_t len);
 
 /**
  * @brief	 Update the start of record data. This is only possible if the
@@ -237,7 +239,7 @@ int storage_area_record_dread(const struct storage_area_record *record,
  *		 This can be used to invalidate records.
  *
  * @param record storage area record.
- * @param update new data to write.
+ * @param data	 new data to write.
  * @param len	 write size.
  * @retval	 0 on success else negative errno code.
  */

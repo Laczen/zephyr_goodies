@@ -87,11 +87,11 @@ ZTEST_USER(storage_area_api, test_read_write_simple)
 	const struct storage_area *sa = &area.area;
 	uint8_t wr[STORAGE_AREA_WRITESIZE(sa)];
 	uint8_t rd[STORAGE_AREA_WRITESIZE(sa)];
-	struct storage_area_chunk rd_chunk = {
+	struct storage_area_iovec rdvec = {
 		.data = &rd,
 		.len = sizeof(rd),
 	};
-	struct storage_area_chunk wr_chunk = {
+	struct storage_area_iovec wrvec = {
 		.data = &wr,
 		.len = sizeof(wr),
 	};
@@ -101,10 +101,10 @@ ZTEST_USER(storage_area_api, test_read_write_simple)
 	memset(wr, 'T', sizeof(wr));
 	memset(rd, 0, sizeof(rd));
 
-	rc = storage_area_prog(sa, 0U, &wr_chunk, 1U);
+	rc = storage_area_writev(sa, 0U, &wrvec, 1U);
 	zassert_equal(rc, 0, "prog returned [%d]", rc);
 
-	rc = storage_area_read(sa, 0U, &rd_chunk, 1U);
+	rc = storage_area_readv(sa, 0U, &rdvec, 1U);
 	zassert_equal(rc, 0, "read returned [%d]", rc);
 
 	zassert_equal(memcmp(rd, wr, sizeof(wr)), 0, "data mismatch");
@@ -120,10 +120,10 @@ ZTEST_USER(storage_area_api, test_read_write_direct)
 	memset(wr, 'T', sizeof(wr));
 	memset(rd, 0, sizeof(rd));
 
-	rc = storage_area_dprog(sa, 0U, wr, sizeof(wr));
+	rc = storage_area_write(sa, 0U, wr, sizeof(wr));
 	zassert_equal(rc, 0, "prog returned [%d]", rc);
 
-	rc = storage_area_dread(sa, 0U, rd, sizeof(rd));
+	rc = storage_area_read(sa, 0U, rd, sizeof(rd));
 	zassert_equal(rc, 0, "read returned [%d]", rc);
 
 	zassert_equal(memcmp(rd, wr, sizeof(wr)), 0, "data mismatch");
@@ -136,7 +136,7 @@ ZTEST_USER(storage_area_api, test_read_write_blocks)
 	uint8_t wr[STORAGE_AREA_WRITESIZE(sa)];
 	uint8_t rd[STORAGE_AREA_WRITESIZE(sa)];
 	uint8_t fill[STORAGE_AREA_WRITESIZE(sa) - 1];
-	struct storage_area_chunk rd_chunk[] = {
+	struct storage_area_iovec rdvec[] = {
 		{
 			.data = (void *)&magic,
 			.len = sizeof(magic),
@@ -146,7 +146,7 @@ ZTEST_USER(storage_area_api, test_read_write_blocks)
 			.len = sizeof(rd),
 		},
 	};
-	struct storage_area_chunk wr_chunk[] = {
+	struct storage_area_iovec wrvec[] = {
 		{
 			.data = (void *)&magic,
 			.len = sizeof(magic),
@@ -166,10 +166,10 @@ ZTEST_USER(storage_area_api, test_read_write_blocks)
 	memset(wr, 'T', sizeof(wr));
 	memset(rd, 0, sizeof(rd));
 
-	rc = storage_area_prog(sa, 0U, wr_chunk, ARRAY_SIZE(wr_chunk));
+	rc = storage_area_writev(sa, 0U, wrvec, ARRAY_SIZE(wrvec));
 	zassert_equal(rc, 0, "prog returned [%d]", rc);
 
-	rc = storage_area_read(sa, 0U, rd_chunk, ARRAY_SIZE(rd_chunk));
+	rc = storage_area_readv(sa, 0U, rdvec, ARRAY_SIZE(rdvec));
 	zassert_equal(rc, 0, "read returned [%d]", rc);
 
 	zassert_equal(magic, 0xA0, "magic has changed");

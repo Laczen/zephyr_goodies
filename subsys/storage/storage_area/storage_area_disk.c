@@ -66,8 +66,8 @@ static int sa_disk_valid(const struct storage_area_disk *disk)
 	return 0;
 }
 
-static int sa_disk_read(const struct storage_area *area, size_t start,
-			const struct storage_area_chunk *ch, size_t cnt)
+static int sa_disk_readv(const struct storage_area *area, size_t start,
+			 const struct storage_area_iovec *iovec, size_t iovcnt)
 {
 	const struct storage_area_disk *disk =
 		CONTAINER_OF(area, struct storage_area_disk, area);
@@ -86,9 +86,9 @@ static int sa_disk_read(const struct storage_area *area, size_t start,
 		goto end;
 	}
 
-	for (size_t i = 0U; i < cnt; i++) {
-		uint8_t *data8 = (uint8_t *)ch[i].data;
-		size_t blen = ch[i].len;
+	for (size_t i = 0U; i < iovcnt; i++) {
+		uint8_t *data8 = (uint8_t *)iovec[i].data;
+		size_t blen = iovec[i].len;
 
 		while (blen != 0U) {
 			size_t cplen = MIN(blen, disk->ssize - bpos);
@@ -112,14 +112,15 @@ static int sa_disk_read(const struct storage_area *area, size_t start,
 	}
 
 	if (rc != 0) {
-		LOG_DBG("read failed at %x", starts * disk->ssize);
+		LOG_DBG("read failed at %x",
+			(starts - disk->start) * disk->ssize);
 	}
 end:
 	return rc;
 }
 
-static int sa_disk_prog(const struct storage_area *area, size_t start,
-			const struct storage_area_chunk *ch, size_t cnt)
+static int sa_disk_writev(const struct storage_area *area, size_t start,
+			  const struct storage_area_iovec *iovec, size_t iovcnt)
 {
 	const struct storage_area_disk *disk =
 		CONTAINER_OF(area, struct storage_area_disk, area);
@@ -135,9 +136,9 @@ static int sa_disk_prog(const struct storage_area *area, size_t start,
 	}
 
 	starts += disk->start;
-	for (size_t i = 0U; i < cnt; i++) {
-		uint8_t *data8 = (uint8_t *)ch[i].data;
-		size_t blen = ch[i].len;
+	for (size_t i = 0U; i < iovcnt; i++) {
+		uint8_t *data8 = (uint8_t *)iovec[i].data;
+		size_t blen = iovec[i].len;
 
 		if (bpos != 0U) {
 			size_t cplen = MIN(blen, align - bpos);
@@ -180,7 +181,8 @@ static int sa_disk_prog(const struct storage_area *area, size_t start,
 	}
 
 	if (rc != 0) {
-		LOG_DBG("prog failed at %x", starts * disk->ssize);
+		LOG_DBG("write failed at %x",
+			(starts - disk->start) * disk->ssize);
 	}
 end:
 	return rc;
@@ -213,7 +215,8 @@ static int sa_disk_erase(const struct storage_area *area, size_t start,
 	}
 
 	if (rc != 0) {
-		LOG_DBG("prog failed at %x", starts * disk->ssize);
+		LOG_DBG("write failed at %x",
+			(starts - disk->start) * disk->ssize);
 	}
 end:
 	return rc;
@@ -240,8 +243,8 @@ end:
 }
 
 const struct storage_area_api storage_area_disk_api = {
-	.read = sa_disk_read,
-	.prog = sa_disk_prog,
+	.readv = sa_disk_readv,
+	.writev = sa_disk_writev,
 	.erase = sa_disk_erase,
 	.ioctl = sa_disk_ioctl,
 };

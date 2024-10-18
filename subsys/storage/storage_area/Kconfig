@@ -56,17 +56,24 @@ config STORAGE_AREA_STORE_DISABLECOMPACT
 	help
 	  Disable compacting a storage area store, using the
 	  store as just a buffer. This will set the spare
-	  sector count to 0.
-	  This configuration option is valid for ALL storage area
-	  stores.
+	  sector count to 0. This configuration is valid
+	  for ALL storage area stores.
 
 config STORAGE_AREA_STORE_READONLY
 	bool "Disable writing"
 	select STORAGE_AREA_STORE_DISABLECOMPACT
 	help
 	  Disable the ability to write to a storage area store.
-	  This configuration option is valid for ALL storage area
+	  This configuration is valid for ALL storage area
 	  stores.
+
+config STORAGE_AREA_STORE_DISABLEFBUPDATE
+	bool "Disable first byte update"
+	help
+	  Disable the ability to update the first byte of data
+	  that is used typically to invalidate a record when
+	  it is possible to rewrite. This configuration option
+	  is valid for ALL storage area stores.
 
 endif #STORAGE_AREA_STORE
 

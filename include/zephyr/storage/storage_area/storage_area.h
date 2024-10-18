@@ -21,10 +21,10 @@
  *
  *
  * There following methods area exposed:
- *   storage_area_read(),	** read chunks **
- *   storage_area_dread(),	** read data direct **
- *   storage_area_prog(),	** program chunks **
- *   storage_area_dprog(),	** program data direct **
+ *   storage_area_read(),	** read data **
+ *   storage_area_readv(),	** read data vector **
+ *   storage_area_write(),	** write data **
+ *   storage_area_writev(),	** write data vector **
  *   storage_area_erase(),	** erase (in erase block addressing) **
  *   storage_area_ioctl()	** used for e.g. getting xip addresses **
  *
@@ -69,7 +69,7 @@ extern "C" {
 
 struct storage_area;
 
-struct storage_area_chunk { /* storage area data chunk */
+struct storage_area_iovec { /* storage area io vector */
 	void *data;         /* pointer to data */
 	size_t len;         /* data length */
 };
@@ -79,6 +79,7 @@ enum storage_area_properties_mask {
 	SA_PROP_FOVRWRITE = 0x0002, /* full overwrite (ram, rram, ...) */
 	SA_PROP_LOVRWRITE = 0x0004, /* limited overwrite (nor flash) */
 	SA_PROP_ZEROERASE = 0x0008, /* erased value is 0x00 */
+	SA_PROP_AUTOERASE = 0x0010, /* erase while writing */
 };
 
 enum storage_area_ioctl_cmd {
@@ -92,10 +93,10 @@ enum storage_area_ioctl_cmd {
  * API to access storage area.
  */
 struct storage_area_api {
-	int (*read)(const struct storage_area *area, size_t start,
-		    const struct storage_area_chunk *ch, size_t cnt);
-	int (*prog)(const struct storage_area *area, size_t start,
-		    const struct storage_area_chunk *ch, size_t cnt);
+	int (*readv)(const struct storage_area *area, size_t start,
+		     const struct storage_area_iovec *iovec, size_t iovcnt);
+	int (*writev)(const struct storage_area *area, size_t start,
+		    const struct storage_area_iovec *iovec, size_t iovcnt);
 	int (*erase)(const struct storage_area *area, size_t start, size_t bcnt);
 	int (*ioctl)(const struct storage_area *area,
 		     enum storage_area_ioctl_cmd cmd, void *data);
@@ -125,22 +126,24 @@ struct storage_area {
 	STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_LOVRWRITE)
 #define STORAGE_AREA_ERASEVALUE(area)                                           \
 	STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_ZEROERASE) ? 0x00 : 0xff
+#define STORAGE_AREA_AUTOERASE(area)						\
+	STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_AUTOERASE)
 
 /**
- * @brief	Read storage chunks.
+ * @brief	 Read iovec from storage area.
  *
- * @param area	storage area.
- * @param start	start in storage area (byte).
- * @param ch	chunks for read.
- * @param cnt   chunk element count.
+ * @param area   storage area.
+ * @param start  start in storage area (byte).
+ * @param iovec  io vector for read.
+ * @param iovcnt iovec element count.
  *
- * @retval	0 on success else negative errno code.
+ * @retval	 0 on success else negative errno code.
  */
-int storage_area_read(const struct storage_area *area, size_t start,
-		      const struct storage_area_chunk *ch, size_t cnt);
+int storage_area_readv(const struct storage_area *area, size_t start,
+		       const struct storage_area_iovec *iovec, size_t iovcnt);
 
 /**
- * @brief	Direct read from storage area.
+ * @brief	Read from storage area.
  *
  * @param area	storage area.
  * @param start	start in storage area (byte).
@@ -149,24 +152,24 @@ int storage_area_read(const struct storage_area *area, size_t start,
  *
  * @retval	0 on success else negative errno code.
  */
-int storage_area_dread(const struct storage_area *area, size_t start, void *data,
-		       size_t len);
+int storage_area_read(const struct storage_area *area, size_t start, void *data,
+		      size_t len);
 
 /**
- * @brief	Program storage chunks.
+ * @brief	 Write iovec to storage area.
  *
- * @param area	storage area.
- * @param start	start in storage area (byte).
- * @param ch	chunks to program.
- * @param cnt   chunk element count.
+ * @param area	 storage area.
+ * @param start	 start in storage area (byte).
+ * @param iovec	 io vector to write.
+ * @param iovcnt iovec element count.
  *
- * @retval	0 on success else negative errno code.
+ * @retval	 0 on success else negative errno code.
  */
-int storage_area_prog(const struct storage_area *area, size_t start,
-		      const struct storage_area_chunk *ch, size_t cnt);
+int storage_area_writev(const struct storage_area *area, size_t start,
+			const struct storage_area_iovec *iovec, size_t iovcnt);
 
 /**
- * @brief	Direct program to storage area.
+ * @brief	Write data to storage area.
  *
  * @param area	storage area.
  * @param start	start in storage area (byte).
@@ -175,7 +178,7 @@ int storage_area_prog(const struct storage_area *area, size_t start,
  *
  * @retval	0 on success else negative errno code.
  */
-int storage_area_dprog(const struct storage_area *area, size_t start,
+int storage_area_write(const struct storage_area *area, size_t start,
 		       const void *data, size_t len);
 
 /**
