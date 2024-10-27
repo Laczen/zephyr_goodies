@@ -27,9 +27,9 @@ LOG_MODULE_REGISTER(sas_test);
 #define AREA_ERASE_SIZE		4096
 #define AREA_WRITE_SIZE		8
 
-const static struct storage_area_flash area = flash_storage_area(
-	FLASH_AREA_DEVICE, FLASH_AREA_OFFSET, FLASH_AREA_XIP, AREA_WRITE_SIZE,
-	AREA_ERASE_SIZE, AREA_SIZE, SA_PROP_LOVRWRITE);
+STORAGE_AREA_FLASH_DEFINE(test,	FLASH_AREA_DEVICE, FLASH_AREA_OFFSET,
+	FLASH_AREA_XIP, AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE,
+	STORAGE_AREA_PROP_LOVRWRITE);
 #endif /* CONFIG_STORAGE_AREA_FLASH */
 
 #ifdef CONFIG_STORAGE_AREA_EEPROM
@@ -40,8 +40,8 @@ const static struct storage_area_flash area = flash_storage_area(
 #define AREA_ERASE_SIZE		1024
 #define AREA_WRITE_SIZE		4
 
-const static struct storage_area_eeprom area = eeprom_storage_area(
-	EEPROM_AREA_DEVICE, 0U, AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE, 0);
+STORAGE_AREA_EEPROM_DEFINE(test, EEPROM_AREA_DEVICE, 0U, AREA_WRITE_SIZE,
+			   AREA_ERASE_SIZE, AREA_SIZE, 0);
 #endif /* CONFIG_STORAGE_AREA_EEPROM */
 
 #ifdef CONFIG_STORAGE_AREA_RAM
@@ -50,18 +50,19 @@ const static struct storage_area_eeprom area = eeprom_storage_area(
 #define AREA_SIZE		DT_REG_SIZE(RAM_NODE)
 #define AREA_ERASE_SIZE		4096
 #define AREA_WRITE_SIZE		4
-const static struct storage_area_ram area = ram_storage_area(
-	DT_REG_ADDR(RAM_NODE), AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE, 0);
+
+STORAGE_AREA_RAM_DEFINE(test, DT_REG_ADDR(RAM_NODE), AREA_WRITE_SIZE,
+			AREA_ERASE_SIZE, AREA_SIZE, 0);
 #endif /* CONFIG_STORAGE_AREA_RAM */
 
 const char cookie[]="!NVS";
 
 #define SECTOR_SIZE 1024
-create_storage_area_store(test, &area.area, (void *)cookie, sizeof(cookie),
+STORAGE_AREA_STORE_DEFINE(test, GET_STORAGE_AREA(test), (void *)cookie, sizeof(cookie),
 			  SECTOR_SIZE, AREA_SIZE / SECTOR_SIZE,
 			  AREA_ERASE_SIZE / SECTOR_SIZE, 0U, NULL, NULL, NULL);
 
-create_settings_storage_area_store(test, get_storage_area_store(test));
+create_settings_storage_area_store(test, GET_STORAGE_AREA_STORE(test));
 
 static void *settings_storage_area_store_api_setup(void)
 {
@@ -72,7 +73,7 @@ static void settings_storage_area_store_api_before(void *fixture)
 {
 	ARG_UNUSED(fixture);
 	
-	int rc = storage_area_erase(&area.area, 0, 1);
+	int rc = storage_area_erase(GET_STORAGE_AREA(test), 0, 1);
 
 	zassert_equal(rc, 0, "erase returned [%d]", rc);
 }

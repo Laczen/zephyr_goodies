@@ -27,9 +27,9 @@ LOG_MODULE_REGISTER(sas_test);
 #define AREA_ERASE_SIZE		4096
 #define AREA_WRITE_SIZE		8
 
-const static struct storage_area_flash area = flash_storage_area(
-	FLASH_AREA_DEVICE, FLASH_AREA_OFFSET, FLASH_AREA_XIP, AREA_WRITE_SIZE,
-	AREA_ERASE_SIZE, AREA_SIZE, SA_PROP_LOVRWRITE);
+STORAGE_AREA_FLASH_DEFINE(test, FLASH_AREA_DEVICE, FLASH_AREA_OFFSET,
+	FLASH_AREA_XIP, AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE,
+	STORAGE_AREA_PROP_LOVRWRITE | STORAGE_AREA_PROP_AUTOERASE);
 #endif /* CONFIG_STORAGE_AREA_FLASH */
 
 #ifdef CONFIG_STORAGE_AREA_EEPROM
@@ -40,8 +40,8 @@ const static struct storage_area_flash area = flash_storage_area(
 #define AREA_ERASE_SIZE		4096
 #define AREA_WRITE_SIZE		4
 
-const static struct storage_area_eeprom area = eeprom_storage_area(
-	EEPROM_AREA_DEVICE, 0U, AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE, 0);
+STORAGE_AREA_EEPROM_DEFINE(test, EEPROM_AREA_DEVICE, 0U, AREA_WRITE_SIZE,
+	AREA_ERASE_SIZE, AREA_SIZE, 0);
 #endif /* CONFIG_STORAGE_AREA_EEPROM */
 
 #ifdef CONFIG_STORAGE_AREA_RAM
@@ -50,8 +50,9 @@ const static struct storage_area_eeprom area = eeprom_storage_area(
 #define AREA_SIZE		DT_REG_SIZE(RAM_NODE)
 #define AREA_ERASE_SIZE		4096
 #define AREA_WRITE_SIZE		4
-const static struct storage_area_ram area = ram_storage_area(
-	DT_REG_ADDR(RAM_NODE), AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE, 0);
+
+STORAGE_AREA_RAM_DEFINE(test, DT_REG_ADDR(RAM_NODE), AREA_WRITE_SIZE,
+	AREA_ERASE_SIZE, AREA_SIZE, 0);
 #endif /* CONFIG_STORAGE_AREA_RAM */
 
 #ifdef CONFIG_STORAGE_AREA_DISK
@@ -63,9 +64,9 @@ const static struct storage_area_ram area = ram_storage_area(
 #define AREA_SIZE	DISK_SCNT * DISK_SSIZE / 2
 #define AREA_ERASE_SIZE	4096
 #define AREA_WRITE_SIZE	DISK_SSIZE
-const static struct storage_area_disk area = disk_storage_area(
-	DISK_NAME, DISK_SCNT / 2, DISK_SSIZE, AREA_WRITE_SIZE, AREA_ERASE_SIZE,
-	AREA_SIZE, 0);
+
+STORAGE_AREA_DISK_DEFINE(test, DISK_NAME, DISK_SCNT / 2, DISK_SSIZE,
+	AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE, 0);
 #endif /* CONFIG_STORAGE_AREA_DISK */
 
 static const char cookie[] = "!NVS";
@@ -141,8 +142,8 @@ void move_cb(const struct storage_area_record *src,
 }
 
 #define SECTOR_SIZE 4096
-create_storage_area_store(test, &area.area, (void *)cookie, sizeof(cookie),
-			  SECTOR_SIZE, AREA_SIZE / SECTOR_SIZE,
+STORAGE_AREA_STORE_DEFINE(test, GET_STORAGE_AREA(test), (void *)cookie,
+			  sizeof(cookie), SECTOR_SIZE, AREA_SIZE / SECTOR_SIZE,
 			  AREA_ERASE_SIZE / SECTOR_SIZE, 0U, move, move_cb,
 			  NULL);
 
@@ -155,7 +156,7 @@ static void storage_area_store_api_before(void *fixture)
 {
 	ARG_UNUSED(fixture);
 
-	int rc = storage_area_erase(&area.area, 0, 1);
+	int rc = storage_area_erase(GET_STORAGE_AREA(test), 0, 1);
 
 	zassert_equal(rc, 0, "erase returned [%d]", rc);
 }
@@ -238,7 +239,7 @@ end:
 
 ZTEST_USER(storage_area_store_api, test_store)
 {
-	struct storage_area_store *store = get_storage_area_store(test);
+	struct storage_area_store *store = GET_STORAGE_AREA_STORE(test);
 	uint32_t wvalue1, wvalue2, rvalue;
 	int rc;
 

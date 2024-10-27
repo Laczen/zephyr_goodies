@@ -4,10 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <string.h>
 #include <errno.h>
+#include <string.h>
 #include <zephyr/storage/storage_area/storage_area_eeprom.h>
-#include <zephyr/drivers/eeprom.h>
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(storage_area_eeprom, CONFIG_STORAGE_AREA_LOG_LEVEL);
@@ -24,7 +23,7 @@ static int sa_eeprom_valid(const struct storage_area_eeprom *eeprom)
 		const size_t asz = area->erase_blocks * area->erase_size;
 		const size_t esz = eeprom_get_size(eeprom->dev);
 
-		if (esz < (eeprom->start + asz)) {
+		if (esz < (eeprom->doffset + asz)) {
 			LOG_DBG("Bad area size");
 			return -EINVAL;
 		}
@@ -33,7 +32,7 @@ static int sa_eeprom_valid(const struct storage_area_eeprom *eeprom)
 	return 0;
 }
 
-static int sa_eeprom_readv(const struct storage_area *area, size_t start,
+static int sa_eeprom_readv(const struct storage_area *area, sa_off_t offset,
 			   const struct storage_area_iovec *iovec, size_t iovcnt)
 {
 	const struct storage_area_eeprom *eeprom =
@@ -44,25 +43,25 @@ static int sa_eeprom_readv(const struct storage_area *area, size_t start,
 		goto end;
 	}
 
-	start += eeprom->start;
+	offset += eeprom->doffset;
 	for (size_t i = 0U; i < iovcnt; i++) {
-		rc = eeprom_read(eeprom->dev, start, iovec[i].data,
+		rc = eeprom_read(eeprom->dev, offset, iovec[i].data,
 				 iovec[i].len);
 		if (rc != 0) {
 			break;
 		}
 
-		start += iovec[i].len;
+		offset += iovec[i].len;
 	}
 
 	if (rc != 0) {
-		LOG_DBG("read failed at %x", start - eeprom->start);
+		LOG_DBG("read failed at %x", offset - eeprom->doffset);
 	}
 end:
 	return rc;
 }
 
-static int sa_eeprom_writev(const struct storage_area *area, size_t start,
+static int sa_eeprom_writev(const struct storage_area *area, sa_off_t offset,
 			    const struct storage_area_iovec *iovec,
 			    size_t iovcnt)
 {
@@ -77,7 +76,7 @@ static int sa_eeprom_writev(const struct storage_area *area, size_t start,
 		goto end;
 	}
 
-	start += eeprom->start;
+	offset += eeprom->doffset;
 	for (size_t i = 0U; i < iovcnt; i++) {
 		uint8_t *data8 = (uint8_t *)iovec[i].data;
 		size_t blen = iovec[i].len;
@@ -91,13 +90,13 @@ static int sa_eeprom_writev(const struct storage_area *area, size_t start,
 			data8 += cplen;
 
 			if (bpos == align) {
-				rc = eeprom_write(eeprom->dev, start, buf,
+				rc = eeprom_write(eeprom->dev, offset, buf,
 						  align);
 				if (rc != 0) {
 					break;
 				}
 
-				start += align;
+				offset += align;
 				bpos = 0U;
 			}
 		}
@@ -105,14 +104,14 @@ static int sa_eeprom_writev(const struct storage_area *area, size_t start,
 		if (blen >= align) {
 			size_t wrlen = blen & ~(align - 1);
 
-			rc = eeprom_write(eeprom->dev, start, data8, wrlen);
+			rc = eeprom_write(eeprom->dev, offset, data8, wrlen);
 			if (rc != 0) {
 				break;
 			}
 
 			blen -= wrlen;
 			data8 += wrlen;
-			start += wrlen;
+			offset += wrlen;
 		}
 
 		if (blen > 0U) {
@@ -122,17 +121,18 @@ static int sa_eeprom_writev(const struct storage_area *area, size_t start,
 	}
 
 	if (rc != 0) {
-		LOG_DBG("write failed at %x", start - eeprom->start);
+		LOG_DBG("write failed at %x", offset - eeprom->doffset);
 	}
 end:
 	return rc;
 }
 
-static int sa_eeprom_erase(const struct storage_area *area, size_t start,
-			   size_t len)
+static int sa_eeprom_erase(const struct storage_area *area, size_t sblk,
+			   size_t bcnt)
 {
 	const struct storage_area_eeprom *eeprom =
 		CONTAINER_OF(area, struct storage_area_eeprom, area);
+	sa_off_t offset = eeprom->doffset + sblk * area->erase_size;
 	uint8_t buf[area->erase_size];
 	int rc = sa_eeprom_valid(eeprom);
 
@@ -141,20 +141,17 @@ static int sa_eeprom_erase(const struct storage_area *area, size_t start,
 	}
 
 	memset(buf, STORAGE_AREA_ERASEVALUE(area), sizeof(buf));
-	start *= area->erase_size;
-	start += eeprom->start;
-
-	for (size_t i = 0; i < len; i++) {
-		rc = eeprom_write(eeprom->dev, start, buf, sizeof(buf));
+	for (size_t i = 0; i < bcnt; i++) {
+		rc = eeprom_write(eeprom->dev, offset, buf, sizeof(buf));
 		if (rc != 0) {
 			break;
 		}
 
-		start += area->erase_size;
+		offset += area->erase_size;
 	}
 
 	if (rc != 0) {
-		LOG_DBG("write failed at %x", start - eeprom->start);
+		LOG_DBG("write failed at %x", offset - eeprom->doffset);
 	}
 end:
 	return rc;

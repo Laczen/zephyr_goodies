@@ -26,17 +26,17 @@ LOG_MODULE_REGISTER(sas_test);
 #define AREA_ERASE_SIZE 4096
 #define AREA_WRITE_SIZE 4
 
-const static struct storage_area_flash area = flash_storage_area(
-	FLASH_AREA_DEVICE, FLASH_AREA_OFFSET, FLASH_AREA_XIP, AREA_WRITE_SIZE,
-	AREA_ERASE_SIZE, AREA_SIZE, SA_PROP_LOVRWRITE);
+STORAGE_AREA_FLASH_DEFINE(test, FLASH_AREA_DEVICE, FLASH_AREA_OFFSET,
+	FLASH_AREA_XIP, AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE,
+	STORAGE_AREA_PROP_LOVRWRITE);
 
 const char cookie[] = "!NVS";
 
 #define SECTOR_SIZE 1024
 /* This storage area store is using only 1 erase block */
-create_storage_area_store(test, &area.area, (void *)cookie, sizeof(cookie),
-			  SECTOR_SIZE, AREA_ERASE_SIZE / SECTOR_SIZE, 0U, 1U,
-			  NULL, NULL, NULL);
+STORAGE_AREA_STORE_DEFINE(test, GET_STORAGE_AREA(test), (void *)cookie,
+	sizeof(cookie), SECTOR_SIZE, AREA_ERASE_SIZE / SECTOR_SIZE, 0U, 1U,
+	NULL, NULL, NULL);
 
 struct __attribute__((packed)) data_format {
 	uint8_t state;
@@ -136,7 +136,7 @@ static int consumer(const struct storage_area_store *store)
 
 int main(void)
 {
-	struct storage_area_store *store = get_storage_area_store(test);
+	struct storage_area_store *store = GET_STORAGE_AREA_STORE(test);
 	int rc;
 
 	LOG_INF("STARTING sample");

@@ -4,10 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <string.h>
 #include <errno.h>
+#include <string.h>
 #include <zephyr/storage/storage_area/storage_area_disk.h>
-#include <zephyr/storage/disk_access.h>
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(storage_area_disk, CONFIG_STORAGE_AREA_LOG_LEVEL);
@@ -66,13 +65,13 @@ static int sa_disk_valid(const struct storage_area_disk *disk)
 	return 0;
 }
 
-static int sa_disk_readv(const struct storage_area *area, size_t start,
+static int sa_disk_readv(const struct storage_area *area, sa_off_t offset,
 			 const struct storage_area_iovec *iovec, size_t iovcnt)
 {
 	const struct storage_area_disk *disk =
 		CONTAINER_OF(area, struct storage_area_disk, area);
-	size_t starts = start / disk->ssize;
-	size_t bpos = start % disk->ssize;
+	size_t starts = offset / disk->ssize;
+	size_t bpos = offset % disk->ssize;
 	uint8_t buf[disk->ssize];
 	int rc = sa_disk_valid(disk);
 
@@ -119,7 +118,7 @@ end:
 	return rc;
 }
 
-static int sa_disk_writev(const struct storage_area *area, size_t start,
+static int sa_disk_writev(const struct storage_area *area, sa_off_t offset,
 			  const struct storage_area_iovec *iovec, size_t iovcnt)
 {
 	const struct storage_area_disk *disk =
@@ -128,7 +127,7 @@ static int sa_disk_writev(const struct storage_area *area, size_t start,
 	const size_t spws = align / disk->ssize;
 	uint8_t buf[align];
 	size_t bpos = 0U;
-	size_t starts = start / disk->ssize;
+	size_t starts = offset / disk->ssize;
 	int rc = sa_disk_valid(disk);
 
 	if (rc != 0) {
@@ -188,13 +187,13 @@ end:
 	return rc;
 }
 
-static int sa_disk_erase(const struct storage_area *area, size_t start,
-			 size_t len)
+static int sa_disk_erase(const struct storage_area *area, size_t sblk,
+			 size_t bcnt)
 {
 	const struct storage_area_disk *disk =
 		CONTAINER_OF(area, struct storage_area_disk, area);
 	const size_t spws = area->erase_size / disk->ssize;
-	size_t starts = start * spws;
+	size_t starts = disk->start + sblk * spws;
 	uint8_t buf[area->erase_size];
 	int rc = sa_disk_valid(disk);
 
@@ -203,9 +202,7 @@ static int sa_disk_erase(const struct storage_area *area, size_t start,
 	}
 
 	memset(buf, STORAGE_AREA_ERASEVALUE(area), sizeof(buf));
-	starts += disk->start;
-
-	for (size_t i = 0; i < len; i++) {
+	for (size_t i = 0; i < bcnt; i++) {
 		rc = disk_access_write(disk->name, buf, starts, spws);
 		if (rc != 0) {
 			break;

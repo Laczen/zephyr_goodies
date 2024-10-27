@@ -4,20 +4,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <string.h>
 #include <errno.h>
-#include <zephyr/sys/util.h>
 #include <zephyr/storage/storage_area/storage_area.h>
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(storage_area, CONFIG_STORAGE_AREA_LOG_LEVEL);
 
-static bool sa_range_valid(const struct storage_area *area, size_t start,
+static bool sa_range_valid(const struct storage_area *area, sa_off_t offset,
 			   size_t len)
 {
 	const size_t asize = area->erase_size * area->erase_blocks;
 
-	if ((asize < len) || ((asize - len) < start)) {
+	if ((offset < 0) || (asize < len) || ((asize - len) < offset)) {
 		LOG_DBG("Invalid range");
 		return false;
 	}
@@ -37,7 +35,7 @@ static size_t sa_iovec_size(const struct storage_area_iovec *iovec,
 	return rv;
 }
 
-int storage_area_readv(const struct storage_area *area, size_t start,
+int storage_area_readv(const struct storage_area *area, sa_off_t offset,
 		       const struct storage_area_iovec *iovec, size_t iovcnt)
 {
 	if ((area == NULL) || (area->api == NULL) || (area->api->readv == NULL)) {
@@ -46,25 +44,25 @@ int storage_area_readv(const struct storage_area *area, size_t start,
 
 	const size_t len = sa_iovec_size(iovec, iovcnt);
 
-	if (!sa_range_valid(area, start, len)) {
+	if (!sa_range_valid(area, offset, len)) {
 		return -EINVAL;
 	}
 
-	return area->api->readv(area, start, iovec, iovcnt);
+	return area->api->readv(area, offset, iovec, iovcnt);
 }
 
-int storage_area_read(const struct storage_area *area, size_t start, void *data,
-		      size_t len)
+int storage_area_read(const struct storage_area *area, sa_off_t offset,
+		      void *data, size_t len)
 {
 	struct storage_area_iovec rd = {
 		.data = data,
 		.len = len,
 	};
 
-	return storage_area_readv(area, start, &rd, 1U);
+	return storage_area_readv(area, offset, &rd, 1U);
 }
 
-int storage_area_writev(const struct storage_area *area, size_t start,
+int storage_area_writev(const struct storage_area *area, sa_off_t offset,
 			const struct storage_area_iovec *iovec, size_t iovcnt)
 {
 	if ((area == NULL) || (area->api == NULL) || (area->api->writev == NULL)) {
@@ -73,20 +71,20 @@ int storage_area_writev(const struct storage_area *area, size_t start,
 
 	const size_t len = sa_iovec_size(iovec, iovcnt);
 
-	if ((!sa_range_valid(area, start, len)) ||
+	if ((!sa_range_valid(area, offset, len)) ||
 	    (((len & (area->write_size - 1)) != 0U))) {
 		return -EINVAL;
 	}
 
-	if (STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_READONLY)) {
+	if (STORAGE_AREA_READONLY(area)) {
 		LOG_DBG("prog not supported (read-only)");
 		return -EROFS;
 	}
 
-	return area->api->writev(area, start, iovec, iovcnt);
+	return area->api->writev(area, offset, iovec, iovcnt);
 }
 
-int storage_area_write(const struct storage_area *area, size_t start,
+int storage_area_write(const struct storage_area *area, sa_off_t offset,
 		       const void *data, size_t len)
 {
 	struct storage_area_iovec wr = {
@@ -94,10 +92,10 @@ int storage_area_write(const struct storage_area *area, size_t start,
 		.len = len,
 	};
 
-	return storage_area_writev(area, start, &wr, 1U);
+	return storage_area_writev(area, offset, &wr, 1U);
 }
 
-int storage_area_erase(const struct storage_area *area, size_t start,
+int storage_area_erase(const struct storage_area *area, size_t sblk,
 		       size_t bcnt)
 {
 	if ((area == NULL) || (area->api == NULL) ||
@@ -107,17 +105,17 @@ int storage_area_erase(const struct storage_area *area, size_t start,
 
 	const size_t ablocks = area->erase_blocks;
 
-	if ((ablocks < bcnt) || ((ablocks - bcnt) < start)) {
+	if ((ablocks < bcnt) || ((ablocks - bcnt) < sblk)) {
 		LOG_DBG("invalid range");
 		return -EINVAL;
 	}
 
-	if (STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_READONLY)) {
+	if (STORAGE_AREA_READONLY(area)) {
 		LOG_DBG("erase not supported (read-only)");
 		return -EROFS;
 	}
 
-	return area->api->erase(area, start, bcnt);
+	return area->api->erase(area, sblk, bcnt);
 }
 
 int storage_area_ioctl(const struct storage_area *area,

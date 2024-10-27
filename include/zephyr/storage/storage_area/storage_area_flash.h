@@ -12,8 +12,7 @@
 #ifndef ZEPHYR_INCLUDE_STORAGE_STORAGE_AREA_FLASH_H_
 #define ZEPHYR_INCLUDE_STORAGE_STORAGE_AREA_FLASH_H_
 
-#include <zephyr/kernel.h>
-#include <zephyr/device.h>
+#include <zephyr/drivers/flash.h>
 #include <zephyr/storage/storage_area/storage_area.h>
 
 #ifdef __cplusplus
@@ -31,13 +30,13 @@ extern "C" {
 struct storage_area_flash {
 	const struct storage_area area;
 	const struct device *dev;
-	const size_t start;
+	const off_t doffset;
 	uintptr_t xip_address;
 };
 
 extern const struct storage_area_api storage_area_flash_api;
 
-#define flash_storage_area(_dev, _start, _xip, _ws, _es, _size, _props)         \
+#define STORAGE_AREA_FLASH(_dev, _doffset, _xip, _ws, _es, _size, _props)       \
 	{                                                                       \
 		.area =                                                         \
 			{                                                       \
@@ -52,8 +51,17 @@ extern const struct storage_area_api storage_area_flash_api;
 				.erase_blocks = _size / _es,                    \
 				.props = _props,                                \
 			},                                                      \
-		.dev = _dev, .start = _start, .xip_address = _xip,              \
+		.dev = _dev, .doffset = _doffset, .xip_address = _xip,          \
 	}
+
+#define STORAGE_AREA_FLASH_DEFINE(_name, _dev, _doffset, _xip, _ws, _es, _size,	\
+				  _props)					\
+	BUILD_ASSERT(_ws != 0, "Invalid write size");				\
+	BUILD_ASSERT((_ws & (_ws - 1)) == 0, "Invalid write size");		\
+	BUILD_ASSERT((_es % _ws) == 0, "Invalid erase size");			\
+	BUILD_ASSERT((_size % _ws) == 0, "Invalid size");			\
+	const struct storage_area_flash _storage_area_##_name =			\
+		STORAGE_AREA_FLASH(_dev, _doffset, _xip, _ws, _es, _size, _props)
 
 /**
  * @}

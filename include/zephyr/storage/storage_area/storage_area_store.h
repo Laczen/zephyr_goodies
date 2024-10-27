@@ -260,7 +260,7 @@ int storage_area_store_get_sector_cookie(const struct storage_area_store *store,
 					 size_t sector, void *cookie,
 					 size_t cksz);
 
-#define storage_area_store(_area, _cookie, _cookie_size, _sector_size,          \
+#define STORAGE_AREA_STORE(_area, _cookie, _cookie_size, _sector_size,          \
 			   _sector_cnt, _spare_sectors, _crc_skip, _wrap_cb,    \
 			   _data)                                               \
 	{                                                                       \
@@ -271,7 +271,7 @@ int storage_area_store_get_sector_cookie(const struct storage_area_store *store,
 		.wrap_cb = _wrap_cb, .data = _data,                             \
 	}
 
-#define create_storage_area_store(_name, _area, _cookie, _cookie_size,          \
+#define STORAGE_AREA_STORE_DEFINE(_name, _area, _cookie, _cookie_size,          \
 				  _sector_size, _sector_cnt, _spare_sectors,    \
 				  _crc_skip, _move, _move_cb, _wrap_cb)         \
 	static struct storage_area_store_data                                   \
@@ -280,13 +280,13 @@ int storage_area_store_get_sector_cookie(const struct storage_area_store *store,
 			.cb.move_cb = _move_cb,                                 \
 			.ready = false,                                         \
 	};                                                                      \
-	static const struct storage_area_store _storage_area_store_##_name =    \
-		storage_area_store(_area, _cookie, _cookie_size, _sector_size,  \
+	const struct storage_area_store _storage_area_store_##_name =		\
+		STORAGE_AREA_STORE(_area, _cookie, _cookie_size, _sector_size,  \
 				   _sector_cnt, _spare_sectors, _crc_skip,      \
 				   _wrap_cb,                                    \
-				   &(_storage_area_store_##_name##_data));
+				   &(_storage_area_store_##_name##_data))
 
-#define get_storage_area_store(_name)                                           \
+#define GET_STORAGE_AREA_STORE(_name)                                           \
 	(struct storage_area_store *)&(_storage_area_store_##_name)
 
 /**

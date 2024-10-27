@@ -5,9 +5,8 @@
  */
 
 #include <errno.h>
-#include <stdint.h>
+#include <string.h>
 #include <zephyr/storage/storage_area/storage_area_flash.h>
-#include <zephyr/drivers/flash.h>
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(storage_area_flash, CONFIG_STORAGE_AREA_LOG_LEVEL);
@@ -37,7 +36,7 @@ static int sa_flash_valid(const struct storage_area_flash *flash)
 		}
 
 		for (size_t i = 0; i < area->erase_blocks; i++) {
-			size_t off = flash->start + i * area->erase_size;
+			off_t off = flash->doffset + i * area->erase_size;
 			int rc;
 
 			rc = flash_get_page_info_by_offs(flash->dev, off, &info);
@@ -57,7 +56,7 @@ static int sa_flash_valid(const struct storage_area_flash *flash)
 	return 0;
 }
 
-static int sa_flash_readv(const struct storage_area *area, size_t start,
+static int sa_flash_readv(const struct storage_area *area, sa_off_t offset,
 			  const struct storage_area_iovec *iovec, size_t iovcnt)
 {
 	const struct storage_area_flash *flash =
@@ -68,51 +67,55 @@ static int sa_flash_readv(const struct storage_area *area, size_t start,
 		goto end;
 	}
 
-	start += flash->start;
+	offset += flash->doffset;
+
 	for (size_t i = 0U; i < iovcnt; i++) {
-		rc = flash_read(flash->dev, start, iovec[i].data, iovec[i].len);
+		rc = flash_read(flash->dev, offset, iovec[i].data, iovec[i].len);
 		if (rc != 0) {
 			break;
 		}
 
-		start += iovec[i].len;
+		offset += iovec[i].len;
 	}
 
 	if (rc != 0) {
-		LOG_DBG("read failed at %x", start);
+		LOG_DBG("read failed at %x", offset - flash->doffset);
 	}
 end:
 	return rc;
 }
 
-static int sa_flash_write(const struct storage_area_flash *flash, size_t start,
+static int sa_flash_write(const struct storage_area_flash *flash, sa_off_t offset,
 			  const uint8_t *data, size_t len)
 {
 	const struct storage_area *area = &flash->area;
 
+	offset += flash->doffset;
+
 	if ((!STORAGE_AREA_AUTOERASE(area)) ||
 	    (STORAGE_AREA_FOVRWRITE(area))) {
-		return flash_write(flash->dev, flash->start + start, data, len);
+		return flash_write(flash->dev, offset, data, len);
 	}
 
 	int rc = 0;
 
 	while (len != 0U) {
 		const size_t esz = area->erase_size;
-		const size_t wrlen = MIN(esz - (start & (esz - 1)), len);
+		const size_t wrlen = MIN(esz - (offset & (esz - 1)), len);
 
-		if ((start & (esz - 1)) == 0U) {
-			rc = flash_erase(flash->dev, flash->start + start, esz);
+		if ((offset & (esz - 1)) == 0U) {
+			rc = flash_erase(flash->dev, offset, esz);
 			if (rc != 0) {
 				break;
 			}
 		}
 
-		rc = flash_write(flash->dev, flash->start + start, data, wrlen);
+		rc = flash_write(flash->dev, offset, data, wrlen);
 		if (rc != 0) {
 			break;
 		}
 
+		offset += wrlen;
 		data += wrlen;
 		len -= wrlen;
 	}
@@ -120,7 +123,7 @@ static int sa_flash_write(const struct storage_area_flash *flash, size_t start,
 	return rc;
 }
 
-static int sa_flash_writev(const struct storage_area *area, size_t start,
+static int sa_flash_writev(const struct storage_area *area, sa_off_t offset,
 			   const struct storage_area_iovec *iovec,
 			   size_t iovcnt)
 {
@@ -148,12 +151,12 @@ static int sa_flash_writev(const struct storage_area *area, size_t start,
 			data8 += cplen;
 
 			if (bpos == align) {
-				rc = sa_flash_write(flash, start, buf, align);
+				rc = sa_flash_write(flash, offset, buf, align);
 				if (rc != 0) {
 					break;
 				}
 
-				start += align;
+				offset += align;
 				bpos = 0U;
 			}
 		}
@@ -161,14 +164,14 @@ static int sa_flash_writev(const struct storage_area *area, size_t start,
 		if (blen >= align) {
 			size_t wrlen = blen & ~(align - 1);
 
-			rc = sa_flash_write(flash, start, data8, wrlen);
+			rc = sa_flash_write(flash, offset, data8, wrlen);
 			if (rc != 0) {
 				break;
 			}
 
 			blen -= wrlen;
 			data8 += wrlen;
-			start += wrlen;
+			offset += wrlen;
 		}
 
 		if (blen > 0U) {
@@ -178,14 +181,14 @@ static int sa_flash_writev(const struct storage_area *area, size_t start,
 	}
 
 	if (rc != 0) {
-		LOG_DBG("prog failed at %x", start);
+		LOG_DBG("prog failed at %x", offset);
 	}
 end:
 	return rc;
 }
 
-static int sa_flash_erase(const struct storage_area *area, size_t start,
-			  size_t len)
+static int sa_flash_erase(const struct storage_area *area, size_t sblk,
+			  size_t bcnt)
 {
 	const struct storage_area_flash *flash =
 		CONTAINER_OF(area, struct storage_area_flash, area);
@@ -195,13 +198,12 @@ static int sa_flash_erase(const struct storage_area *area, size_t start,
 		goto end;
 	}
 
-	start *= area->erase_size;
-	len *= area->erase_size;
+	const off_t offset = flash->doffset + sblk * area->erase_size;
+	const size_t esize = bcnt * area->erase_size;
 
-	start += flash->start;
-	rc = flash_erase(flash->dev, start, len);
+	rc = flash_erase(flash->dev, offset, esize);
 	if (rc != 0) {
-		LOG_DBG("erase failed at %x", start);
+		LOG_DBG("erase failed at %x", offset - flash->doffset);
 	}
 end:
 	return rc;
@@ -220,7 +222,7 @@ static int sa_flash_ioctl(const struct storage_area *area,
 
 	rc = -ENOTSUP;
 	switch (cmd) {
-	case SA_IOCTL_XIPADDRESS:
+	case STORAGE_AREA_IOCTL_XIPADDRESS:
 		if (data == NULL) {
 			LOG_DBG("No return data supplied");
 			rc = -EINVAL;

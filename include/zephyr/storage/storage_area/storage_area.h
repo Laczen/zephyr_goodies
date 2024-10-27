@@ -17,10 +17,10 @@
  * any limitations of the underlying storage device). A storage area can be
  * defined with wrong properties, optionally the definition will be checked
  * by defining the Kconfig option `CONFIG_STORAGE_AREA_VERIFY` that is by
- * default enabled for `DEBUG`builds.
+ * default enabled for `DEBUG` builds.
  *
  *
- * There following methods area exposed:
+ * There following methods are exposed:
  *   storage_area_read(),	** read data **
  *   storage_area_readv(),	** read data vector **
  *   storage_area_write(),	** write data **
@@ -29,7 +29,7 @@
  *   storage_area_ioctl()	** used for e.g. getting xip addresses **
  *
  * The subsystem is easy extendable to create custom (virtual) storage areas
- * that consist of e.g. a combination of flash and ram, a encrypted storage
+ * that consist of e.g. a combination of flash and ram, an encrypted storage
  * area, ...
  *
  * A storage area is defined e.g. for flash:
@@ -55,6 +55,8 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <sys/types.h>
+#include <zephyr/sys/util.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -67,6 +69,9 @@ extern "C" {
  * @{
  */
 
+/* Allow the sa_off_t type to be redefined if needed */
+typedef off_t sa_off_t;
+
 struct storage_area;
 
 struct storage_area_iovec { /* storage area io vector */
@@ -75,16 +80,16 @@ struct storage_area_iovec { /* storage area io vector */
 };
 
 enum storage_area_properties_mask {
-	SA_PROP_READONLY = 0x0001,
-	SA_PROP_FOVRWRITE = 0x0002, /* full overwrite (ram, rram, ...) */
-	SA_PROP_LOVRWRITE = 0x0004, /* limited overwrite (nor flash) */
-	SA_PROP_ZEROERASE = 0x0008, /* erased value is 0x00 */
-	SA_PROP_AUTOERASE = 0x0010, /* erase while writing */
+	STORAGE_AREA_PROP_READONLY = BIT(0),
+	STORAGE_AREA_PROP_FOVRWRITE = BIT(1), /* full overwrite (ram, rram, ...) */
+	STORAGE_AREA_PROP_LOVRWRITE = BIT(2), /* limited overwrite (nor flash) */
+	STORAGE_AREA_PROP_ZEROERASE = BIT(3), /* erased value is 0x00 */
+	STORAGE_AREA_PROP_AUTOERASE = BIT(4), /* erase while writing */
 };
 
 enum storage_area_ioctl_cmd {
-	SA_IOCTL_NONE,
-	SA_IOCTL_XIPADDRESS, /* retrieve the storage area xip address */
+	STORAGE_AREA_IOCTL_NONE,
+	STORAGE_AREA_IOCTL_XIPADDRESS, /* retrieve the storage area xip address */
 };
 
 /**
@@ -93,11 +98,11 @@ enum storage_area_ioctl_cmd {
  * API to access storage area.
  */
 struct storage_area_api {
-	int (*readv)(const struct storage_area *area, size_t start,
+	int (*readv)(const struct storage_area *area, sa_off_t offset,
 		     const struct storage_area_iovec *iovec, size_t iovcnt);
-	int (*writev)(const struct storage_area *area, size_t start,
+	int (*writev)(const struct storage_area *area, sa_off_t offset,
 		    const struct storage_area_iovec *iovec, size_t iovcnt);
-	int (*erase)(const struct storage_area *area, size_t start, size_t bcnt);
+	int (*erase)(const struct storage_area *area, size_t sblk, size_t bcnt);
 	int (*ioctl)(const struct storage_area *area,
 		     enum storage_area_ioctl_cmd cmd, void *data);
 };
@@ -119,78 +124,84 @@ struct storage_area {
 #define STORAGE_AREA_HAS_PROPERTY(area, prop) ((area->props & prop) == prop)
 #define STORAGE_AREA_WRITESIZE(area)          area->write_size
 #define STORAGE_AREA_ERASESIZE(area)          area->erase_size
-#define STORAGE_AREA_SIZE(area)               area->erase_size * area->erase_blocks
+#define STORAGE_AREA_SIZE(area)							\
+	(area->erase_size * area->erase_blocks)
+#define STORAGE_AREA_READONLY(area)                                             \
+	STORAGE_AREA_HAS_PROPERTY(area, STORAGE_AREA_PROP_READONLY)
 #define STORAGE_AREA_FOVRWRITE(area)                                            \
-	STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_FOVRWRITE)
+	STORAGE_AREA_HAS_PROPERTY(area, STORAGE_AREA_PROP_FOVRWRITE)
 #define STORAGE_AREA_LOVRWRITE(area)                                            \
-	STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_LOVRWRITE)
+	STORAGE_AREA_HAS_PROPERTY(area, STORAGE_AREA_PROP_LOVRWRITE)
 #define STORAGE_AREA_ERASEVALUE(area)                                           \
-	STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_ZEROERASE) ? 0x00 : 0xff
+	STORAGE_AREA_HAS_PROPERTY(area, STORAGE_AREA_PROP_ZEROERASE) ?		\
+	0x00 : 0xff
 #define STORAGE_AREA_AUTOERASE(area)						\
-	STORAGE_AREA_HAS_PROPERTY(area, SA_PROP_AUTOERASE)
+	STORAGE_AREA_HAS_PROPERTY(area, STORAGE_AREA_PROP_AUTOERASE)
 
+#define GET_STORAGE_AREA(_name)							\
+	(struct storage_area *)&_storage_area_##_name.area
 /**
  * @brief	 Read iovec from storage area.
  *
  * @param area   storage area.
- * @param start  start in storage area (byte).
+ * @param offset offset in storage area (byte).
  * @param iovec  io vector for read.
  * @param iovcnt iovec element count.
  *
  * @retval	 0 on success else negative errno code.
  */
-int storage_area_readv(const struct storage_area *area, size_t start,
+int storage_area_readv(const struct storage_area *area, sa_off_t offset,
 		       const struct storage_area_iovec *iovec, size_t iovcnt);
 
 /**
- * @brief	Read from storage area.
+ * @brief	 Read from storage area.
  *
- * @param area	storage area.
- * @param start	start in storage area (byte).
- * @param data	data.
- * @param len   read size.
+ * @param area	 storage area.
+ * @param offset offset in storage area (byte).
+ * @param data	 data.
+ * @param len    read size.
  *
- * @retval	0 on success else negative errno code.
+ * @retval	 0 on success else negative errno code.
  */
-int storage_area_read(const struct storage_area *area, size_t start, void *data,
-		      size_t len);
+int storage_area_read(const struct storage_area *area, sa_off_t offset,
+		      void *data, size_t len);
 
 /**
  * @brief	 Write iovec to storage area.
  *
  * @param area	 storage area.
- * @param start	 start in storage area (byte).
+ * @param offset offset in storage area (byte).
  * @param iovec	 io vector to write.
  * @param iovcnt iovec element count.
  *
  * @retval	 0 on success else negative errno code.
  */
-int storage_area_writev(const struct storage_area *area, size_t start,
+int storage_area_writev(const struct storage_area *area, sa_off_t offset,
 			const struct storage_area_iovec *iovec, size_t iovcnt);
 
 /**
- * @brief	Write data to storage area.
+ * @brief	 Write data to storage area.
  *
- * @param area	storage area.
- * @param start	start in storage area (byte).
- * @param data	data to program.
- * @param len   program size.
+ * @param area	 storage area.
+ * @param offset offset in storage area (byte).
+ * @param data	 data to program.
+ * @param len    program size.
  *
- * @retval	0 on success else negative errno code.
+ * @retval	 0 on success else negative errno code.
  */
-int storage_area_write(const struct storage_area *area, size_t start,
+int storage_area_write(const struct storage_area *area, sa_off_t offset,
 		       const void *data, size_t len);
 
 /**
- * @brief	Erase storage area.
+ * @brief      Erase storage area.
  *
- * @param area  storage area.
- * @param start start block
- * @param bcnt	number of blocks to erase.
+ * @param area storage area.
+ * @param sblk start block
+ * @param bcnt number of blocks to erase.
  *
- * @retval	0 on success else negative errno code.
+ * @retval     0 on success else negative errno code.
  */
-int storage_area_erase(const struct storage_area *area, size_t start,
+int storage_area_erase(const struct storage_area *area, size_t sblk,
 		       size_t bcnt);
 
 /**

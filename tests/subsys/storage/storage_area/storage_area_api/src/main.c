@@ -26,9 +26,9 @@ LOG_MODULE_REGISTER(sa_api_test);
 #define AREA_ERASE_SIZE		4096
 #define AREA_WRITE_SIZE		512
 
-const static struct storage_area_flash area = flash_storage_area(
-	FLASH_AREA_DEVICE, FLASH_AREA_OFFSET, FLASH_AREA_XIP, AREA_WRITE_SIZE,
-	AREA_ERASE_SIZE, AREA_SIZE, SA_PROP_LOVRWRITE);
+STORAGE_AREA_FLASH_DEFINE(test, FLASH_AREA_DEVICE, FLASH_AREA_OFFSET,
+	FLASH_AREA_XIP, AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE,
+	STORAGE_AREA_PROP_LOVRWRITE);
 #endif /* CONFIG_STORAGE_AREA_FLASH */
 
 #ifdef CONFIG_STORAGE_AREA_EEPROM
@@ -39,8 +39,8 @@ const static struct storage_area_flash area = flash_storage_area(
 #define AREA_ERASE_SIZE		1024
 #define AREA_WRITE_SIZE		4
 
-const static struct storage_area_eeprom area = eeprom_storage_area(
-	EEPROM_AREA_DEVICE, 0U, AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE, 0);
+STORAGE_AREA_EEPROM_DEFINE(test, EEPROM_AREA_DEVICE, 0U, AREA_WRITE_SIZE,
+	AREA_ERASE_SIZE, AREA_SIZE, 0);
 #endif /* CONFIG_STORAGE_AREA_EEPROM */
 
 #ifdef CONFIG_STORAGE_AREA_RAM
@@ -49,8 +49,9 @@ const static struct storage_area_eeprom area = eeprom_storage_area(
 #define AREA_SIZE	DT_REG_SIZE(RAM_NODE)
 #define AREA_ERASE_SIZE	4096
 #define AREA_WRITE_SIZE	4
-const static struct storage_area_ram area = ram_storage_area(
-	DT_REG_ADDR(RAM_NODE), AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE, 0);
+
+STORAGE_AREA_RAM_DEFINE(test, DT_REG_ADDR(RAM_NODE), AREA_WRITE_SIZE,
+	AREA_ERASE_SIZE, AREA_SIZE, 0);
 #endif /* CONFIG_STORAGE_AREA_RAM */
 
 #ifdef CONFIG_STORAGE_AREA_DISK
@@ -62,9 +63,9 @@ const static struct storage_area_ram area = ram_storage_area(
 #define AREA_SIZE	DISK_SCNT * DISK_SSIZE / 2
 #define AREA_ERASE_SIZE	DISK_SSIZE
 #define AREA_WRITE_SIZE	DISK_SSIZE
-const static struct storage_area_disk area = disk_storage_area(
-	DISK_NAME, DISK_SCNT / 2, DISK_SSIZE, AREA_WRITE_SIZE, AREA_ERASE_SIZE,
-	AREA_SIZE, 0);
+
+STORAGE_AREA_DISK_DEFINE(test, DISK_NAME, DISK_SCNT / 2, DISK_SSIZE,
+	AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE, 0);
 #endif /* CONFIG_STORAGE_AREA_DISK */
 
 static void *storage_area_api_setup(void)
@@ -76,7 +77,7 @@ static void storage_area_api_before(void *fixture)
 {
 	ARG_UNUSED(fixture);
 
-	const struct storage_area *sa = &area.area;
+	const struct storage_area *sa = GET_STORAGE_AREA(test);
 	int rc = storage_area_erase(sa, 0, 1);
 
 	zassert_equal(rc, 0, "erase returned [%d]", rc);
@@ -84,7 +85,7 @@ static void storage_area_api_before(void *fixture)
 
 ZTEST_USER(storage_area_api, test_read_write_simple)
 {
-	const struct storage_area *sa = &area.area;
+	const struct storage_area *sa = GET_STORAGE_AREA(test);
 	uint8_t wr[STORAGE_AREA_WRITESIZE(sa)];
 	uint8_t rd[STORAGE_AREA_WRITESIZE(sa)];
 	struct storage_area_iovec rdvec = {
@@ -112,7 +113,7 @@ ZTEST_USER(storage_area_api, test_read_write_simple)
 
 ZTEST_USER(storage_area_api, test_read_write_direct)
 {
-	const struct storage_area *sa = &area.area;
+	const struct storage_area *sa = GET_STORAGE_AREA(test);
 	uint8_t wr[STORAGE_AREA_WRITESIZE(sa)];
 	uint8_t rd[STORAGE_AREA_WRITESIZE(sa)];
 	int rc;
@@ -131,7 +132,7 @@ ZTEST_USER(storage_area_api, test_read_write_direct)
 
 ZTEST_USER(storage_area_api, test_read_write_blocks)
 {
-	const struct storage_area *sa = &area.area;
+	const struct storage_area *sa = GET_STORAGE_AREA(test);
 	uint8_t magic = 0xA0;
 	uint8_t wr[STORAGE_AREA_WRITESIZE(sa)];
 	uint8_t rd[STORAGE_AREA_WRITESIZE(sa)];
@@ -178,10 +179,10 @@ ZTEST_USER(storage_area_api, test_read_write_blocks)
 
 ZTEST_USER(storage_area_api, test_ioctl)
 {
-	const struct storage_area *sa = &area.area;
+	const struct storage_area *sa = GET_STORAGE_AREA(test);
 	uintptr_t xip;
 
-	int rc = storage_area_ioctl(sa, SA_IOCTL_XIPADDRESS, &xip);
+	int rc = storage_area_ioctl(sa, STORAGE_AREA_IOCTL_XIPADDRESS, &xip);
 
 	if ((IS_ENABLED(CONFIG_STORAGE_AREA_DISK)) ||
 	    (IS_ENABLED(CONFIG_STORAGE_AREA_EEPROM))) {

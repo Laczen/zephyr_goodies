@@ -12,8 +12,7 @@
 #ifndef ZEPHYR_INCLUDE_STORAGE_STORAGE_AREA_EEPROM_H_
 #define ZEPHYR_INCLUDE_STORAGE_STORAGE_AREA_EEPROM_H_
 
-#include <zephyr/kernel.h>
-#include <zephyr/device.h>
+#include <zephyr/drivers/eeprom.h>
 #include <zephyr/storage/storage_area/storage_area.h>
 
 #ifdef __cplusplus
@@ -30,12 +29,12 @@ extern "C" {
 struct storage_area_eeprom {
 	const struct storage_area area;
 	const struct device *dev;
-	const size_t start;
+	const off_t doffset;
 };
 
 extern const struct storage_area_api storage_area_eeprom_api;
 
-#define eeprom_storage_area(_dev, _start, _ws, _es, _size, _props)              \
+#define STORAGE_AREA_EEPROM(_dev, _doffset, _ws, _es, _size, _props)            \
 	{                                                                       \
 		.area =                                                         \
 			{                                                       \
@@ -48,10 +47,19 @@ extern const struct storage_area_api storage_area_eeprom_api;
 				.write_size = _ws,                              \
 				.erase_size = _es,                              \
 				.erase_blocks = _size / _es,                    \
-				.props = _props | SA_PROP_FOVRWRITE,            \
+				.props = _props | STORAGE_AREA_PROP_FOVRWRITE,	\
 			},                                                      \
-		.dev = _dev, .start = _start,                                   \
+		.dev = _dev, .doffset = _doffset,                               \
 	}
+
+#define STORAGE_AREA_EEPROM_DEFINE(_name, _dev, _doffset, _ws, _es, _size,	\
+				   _props)					\
+	BUILD_ASSERT(_ws != 0, "Invalid write size");				\
+	BUILD_ASSERT((_ws & (_ws - 1)) == 0, "Invalid write size");		\
+	BUILD_ASSERT((_es % _ws) == 0, "Invalid erase size");			\
+	BUILD_ASSERT((_size % _ws) == 0, "Invalid size");			\
+	const struct storage_area_eeprom _storage_area_##_name =		\
+		STORAGE_AREA_EEPROM(_dev, _doffset, _ws, _es, _size, _props)
 
 /**
  * @}
