@@ -27,7 +27,7 @@ LOG_MODULE_REGISTER(sas_test);
 #define AREA_ERASE_SIZE		4096
 #define AREA_WRITE_SIZE		8
 
-STORAGE_AREA_FLASH_DEFINE(test, FLASH_AREA_DEVICE, FLASH_AREA_OFFSET,
+STORAGE_AREA_FLASH_RW_DEFINE(test, FLASH_AREA_DEVICE, FLASH_AREA_OFFSET,
 	FLASH_AREA_XIP, AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE,
 	STORAGE_AREA_PROP_LOVRWRITE | STORAGE_AREA_PROP_AUTOERASE);
 #endif /* CONFIG_STORAGE_AREA_FLASH */
@@ -40,7 +40,7 @@ STORAGE_AREA_FLASH_DEFINE(test, FLASH_AREA_DEVICE, FLASH_AREA_OFFSET,
 #define AREA_ERASE_SIZE		4096
 #define AREA_WRITE_SIZE		4
 
-STORAGE_AREA_EEPROM_DEFINE(test, EEPROM_AREA_DEVICE, 0U, AREA_WRITE_SIZE,
+STORAGE_AREA_EEPROM_RW_DEFINE(test, EEPROM_AREA_DEVICE, 0U, AREA_WRITE_SIZE,
 	AREA_ERASE_SIZE, AREA_SIZE, 0);
 #endif /* CONFIG_STORAGE_AREA_EEPROM */
 
@@ -51,7 +51,7 @@ STORAGE_AREA_EEPROM_DEFINE(test, EEPROM_AREA_DEVICE, 0U, AREA_WRITE_SIZE,
 #define AREA_ERASE_SIZE		4096
 #define AREA_WRITE_SIZE		4
 
-STORAGE_AREA_RAM_DEFINE(test, DT_REG_ADDR(RAM_NODE), AREA_WRITE_SIZE,
+STORAGE_AREA_RAM_RW_DEFINE(test, DT_REG_ADDR(RAM_NODE), AREA_WRITE_SIZE,
 	AREA_ERASE_SIZE, AREA_SIZE, 0);
 #endif /* CONFIG_STORAGE_AREA_RAM */
 
@@ -65,7 +65,7 @@ STORAGE_AREA_RAM_DEFINE(test, DT_REG_ADDR(RAM_NODE), AREA_WRITE_SIZE,
 #define AREA_ERASE_SIZE	4096
 #define AREA_WRITE_SIZE	DISK_SSIZE
 
-STORAGE_AREA_DISK_DEFINE(test, DISK_NAME, DISK_SCNT / 2, DISK_SSIZE,
+STORAGE_AREA_DISK_RW_DEFINE(test, DISK_NAME, DISK_SCNT / 2, DISK_SSIZE,
 	AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE, 0);
 #endif /* CONFIG_STORAGE_AREA_DISK */
 
@@ -141,11 +141,15 @@ void move_cb(const struct storage_area_record *src,
 		dst->loc);
 }
 
+const struct storage_area_store_compact_cb compact_cb = {
+	.move = move,
+	.move_cb = move_cb,
+};
+
 #define SECTOR_SIZE 4096
-STORAGE_AREA_STORE_DEFINE(test, GET_STORAGE_AREA(test), (void *)cookie,
-			  sizeof(cookie), SECTOR_SIZE, AREA_SIZE / SECTOR_SIZE,
-			  AREA_ERASE_SIZE / SECTOR_SIZE, 0U, move, move_cb,
-			  NULL);
+STORAGE_AREA_STORE_PCB_DEFINE(test, GET_STORAGE_AREA(test), (void *)cookie,
+			      sizeof(cookie), SECTOR_SIZE, AREA_SIZE / SECTOR_SIZE,
+			      AREA_ERASE_SIZE / SECTOR_SIZE, 0U);
 
 static void *storage_area_store_api_setup(void)
 {
@@ -158,7 +162,7 @@ static void storage_area_store_api_before(void *fixture)
 
 	int rc = storage_area_erase(GET_STORAGE_AREA(test), 0, 1);
 
-	zassert_equal(rc, 0, "erase returned [%d]", rc);
+	zassert_ok(rc, "erase returned [%d]", rc);
 }
 
 void storage_area_store_report_state(char *tag,
@@ -240,64 +244,66 @@ end:
 ZTEST_USER(storage_area_store_api, test_store)
 {
 	struct storage_area_store *store = GET_STORAGE_AREA_STORE(test);
-	uint32_t wvalue1, wvalue2, rvalue;
+	uint32_t wvalue1, wvalue2, wvalue3, rvalue;
 	int rc;
 
-	rc = storage_area_store_mount(store, NULL);
-	zassert_equal(rc, 0, "mount returned [%d]", rc);
+	rc = storage_area_store_mount(store, &compact_cb);
+	zassert_ok(rc, "mount returned [%d]", rc);
 	storage_area_store_report_state("Mount", store);
 
 	wvalue1 = 0U;
 	rc = write_data(store, "data1", wvalue1);
-	zassert_equal(rc, 0, "write returned [%d]", rc);
+	zassert_ok(rc, "write returned [%d]", rc);
 	storage_area_store_report_state("Write", store);
 
 	rvalue = 0xFFFF;
 	rc = read_data(store, "data1", &rvalue);
-	zassert_equal(rc, 0, "read returned [%d]", rc);
+	zassert_ok(rc, "read returned [%d]", rc);
 	zassert_equal(rvalue, wvalue1, "bad data read");
 
 	rc = storage_area_store_unmount(store);
-	zassert_equal(rc, 0, "unmount returned [%d]", rc);
+	zassert_ok(rc, "unmount returned [%d]", rc);
 	storage_area_store_report_state("Unmount", store);
 
-	rc = storage_area_store_mount(store, NULL);
-	zassert_equal(rc, 0, "mount returned [%d]", rc);
+	rc = storage_area_store_mount(store, &compact_cb);
+	zassert_ok(rc, "mount returned [%d]", rc);
 	storage_area_store_report_state("Mount", store);
 
 	rvalue = 0xFFFF;
 	rc = read_data(store, "data1", &rvalue);
-	zassert_equal(rc, 0, "read returned [%d]", rc);
+	zassert_ok(rc, "read returned [%d]", rc);
 	zassert_equal(rvalue, wvalue1, "bad data read");
 
 	wvalue2 = 0x00C0FFEE;
 	rc = write_data(store, "mydata/test", wvalue2);
-	zassert_equal(rc, 0, "write returned [%d]", rc);
+	zassert_ok(rc, "write returned [%d]", rc);
 	storage_area_store_report_state("Write", store);
 
 	rvalue = 0xFFFF;
 	rc = read_data(store, "mydata/test", &rvalue);
-	zassert_equal(rc, 0, "read returned [%d]", rc);
+	zassert_ok(rc, "read returned [%d]", rc);
 	zassert_equal(rvalue, wvalue2, "bad data read");
 
-	wvalue2 = 0U;
+	wvalue3 = 0U;
 	for (int i = 0; i < store->sector_cnt; i++) {
-		while (write_data(store, "data2", wvalue2) == 0) {
-
+		while (write_data(store, "data2", wvalue3) == 0) {
+			wvalue3++;
 		}
+
+		wvalue3--;
 		storage_area_store_report_state("Write", store);
-		rc = storage_area_store_compact(store);
-		zassert_equal(rc, 0, "compact returned [%d]", rc);
+		rc = storage_area_store_compact(store, &compact_cb);
+		zassert_ok(rc, "compact returned [%d]", rc);
 		storage_area_store_report_state("Compact", store);
 	}
 
 	rvalue = 0xFFFF;
 	rc = read_data(store, "data1", &rvalue);
-	zassert_equal(rc, 0, "read returned [%d]", rc);
+	zassert_ok(rc, "read returned [%d]", rc);
 	zassert_equal(rvalue, wvalue1, "bad data read");
 
 	rc = storage_area_store_unmount(store);
-	zassert_equal(rc, 0, "unmount returned [%d]", rc);
+	zassert_ok(rc, "unmount returned [%d]", rc);
 	storage_area_store_report_state("Unmount", store);
 
 	size_t wroff;
@@ -307,16 +313,26 @@ ZTEST_USER(storage_area_store_api, test_store)
 	wroff -= STORAGE_AREA_WRITESIZE(store->area);
 	memset(bad, 0x0, sizeof(bad));
 	rc = storage_area_write(store->area, wroff, bad, sizeof(bad));
-	zassert_equal(rc, 0, "dprog failed [%d]", rc);
+	zassert_ok(rc, "write returned [%d]", rc);
 
-	rc = storage_area_store_mount(store, NULL);
-	zassert_equal(rc, 0, "mount returned [%d]", rc);
+	rc = storage_area_store_mount(store, &compact_cb);
+	zassert_ok(rc, "mount returned [%d]", rc);
 	storage_area_store_report_state("Mount", store);
 
 	rvalue = 0xFFFF;
 	rc = read_data(store, "data1", &rvalue);
-	zassert_equal(rc, 0, "read returned [%d]", rc);
+	zassert_ok(rc, "read returned [%d]", rc);
 	zassert_equal(rvalue, wvalue1, "bad data read");
+
+	rvalue = 0xFFFF;
+	rc = read_data(store, "mydata/test", &rvalue);
+	zassert_ok(rc, "read returned [%d]", rc);
+	zassert_equal(rvalue, wvalue2, "bad data read");
+
+	rvalue = 0xFFFF;
+	rc = read_data(store, "data2", &rvalue);
+	zassert_ok(rc, "read returned [%d]", rc);
+	zassert_equal(rvalue, wvalue3, "bad data read");
 }
 
 ZTEST_SUITE(storage_area_store_api, NULL, storage_area_store_api_setup,

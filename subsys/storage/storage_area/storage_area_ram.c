@@ -113,9 +113,14 @@ static int sa_ram_ioctl(const struct storage_area *area,
 	return rc;
 }
 
-const struct storage_area_api storage_area_ram_api = {
+const struct storage_area_api storage_area_ram_rw_api = {
 	.readv = sa_ram_readv,
 	.writev = sa_ram_writev,
 	.erase = sa_ram_erase,
+	.ioctl = sa_ram_ioctl,
+};
+
+const struct storage_area_api storage_area_ram_ro_api = {
+	.readv = sa_ram_readv,
 	.ioctl = sa_ram_ioctl,
 };

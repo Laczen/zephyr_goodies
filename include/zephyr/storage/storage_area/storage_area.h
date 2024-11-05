@@ -5,38 +5,40 @@
  */
 
 /**
- * @file
- * @brief Public API for storage area subsystem
+ * @brief A storage area is a region on flash, eeprom, disk, ram, ... with
+ *        fixed write-size and fixed erase-size.
  *
  * The storage area API is a subsystem that creates a unified method to work
- * with flash, eeprom, ram, disks, files, ... for storage. A storage area is
- * an area that has a number of constant sized erase blocks, and has constant
- * write block size. The storage area does not necessarily inherit the
- * limitations of the underlying storage device but rather defines a method of
- * how the underlying storage device will be used (however it does not remove
- * any limitations of the underlying storage device). A storage area can be
- * defined with wrong properties, optionally the definition will be checked
- * by defining the Kconfig option `CONFIG_STORAGE_AREA_VERIFY` that is by
- * default enabled for `DEBUG` builds.
+ * with flash, eeprom, ram, disks, files, ... for storage.
  *
+ * A storage area is an area that has a number of constant sized erase blocks,
+ * and has constant write block size. The storage area does not necessarily
+ * inherit the limitations of the underlying storage device but rather defines
+ * a method of how the underlying storage device will be used (however it does
+ * not remove any limitations of the underlying storage device).
  *
- * There following methods are exposed:
- *   storage_area_read(),	** read data **
- *   storage_area_readv(),	** read data vector **
- *   storage_area_write(),	** write data **
- *   storage_area_writev(),	** write data vector **
- *   storage_area_erase(),	** erase (in erase block addressing) **
- *   storage_area_ioctl()	** used for e.g. getting xip addresses **
+ * A storage area can be defined with wrong properties (e.g. an erase-size
+ * smaller than the erase-block-size of the underlying storage device).
+ * Optionally the definition is checked by defining the Kconfig option
+ * `CONFIG_STORAGE_AREA_VERIFY` (default enabled for `DEBUG` builds).
  *
  * The subsystem is easy extendable to create custom (virtual) storage areas
  * that consist of e.g. a combination of flash and ram, an encrypted storage
  * area, ...
  *
- * A storage area is defined e.g. for flash:
- * struct storage_area_flash fa =
- *	flash_storage_area(dev, start, xip_address, write_size, erase_size,
- *			   size, properties);
- * struct storage_area *area = &fa.area;
+ * There following methods are exposed:
+ * - storage_area_read(): read data,
+ * - storage_area_readv(): read data vector,
+ * - storage_area_write(): write data,
+ * - storage_area_writev(): write data vector,
+ * - storage_area_erase(): erase (in erase block addressing),
+ * - storage_area_ioctl(): used for e.g. getting xip addresses,
+ *
+ * A storage area is defined e.g. for a read-write area on flash:
+ * @code{.c}
+ * STORAGE_AREA_FLASH_RW_DEFINE(name, ...);
+ * struct storage_area *area = GET_STORAGE_AREA(name);
+ * @endcode
  *
  * For other storage devices (eeprom, ram, disk, ...) similar macros are
  * defines, but they might differ slightly.
@@ -44,10 +46,11 @@
  * The write_size, erase_size, ... are declarations of how the storage_area
  * will be used The write_size is limited to a power of 2, erase_size should
  * be a multiple of write_size and size should be a multiple of erase_size.
- * The macro definitions xxxxx_storage_area(...) checks these conditions but
- * always succeeds. Trying to use a badly sized storage area will result in
- * failure of any of the exposed methods.
+ * The macro definitions STORAGE_AREA_XXX_DEFINE(...) checks these conditions.
  *
+ * @defgroup storage_area Storage area
+ * @ingroup storage_apis
+ * @{
  */
 
 #ifndef ZEPHYR_INCLUDE_STORAGE_STORAGE_AREA_H_
@@ -55,91 +58,90 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include <sys/types.h>
 #include <zephyr/sys/util.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/**
- * @brief Storage_area interface
- * @defgroup storage_area_interface Storage_area interface
- * @ingroup storage_apis
- * @{
- */
-
 /* Allow the sa_off_t type to be redefined if needed */
-typedef off_t sa_off_t;
+#ifdef CONFIG_STORAGE_AREA_OFFSET_64BIT
+typedef uint64_t sa_off_t;
+#else
+typedef uint32_t sa_off_t;
+#endif
 
 struct storage_area;
 
-struct storage_area_iovec { /* storage area io vector */
-	void *data;         /* pointer to data */
-	size_t len;         /* data length */
+/** storage area input-output vector */
+struct storage_area_iovec {
+	void *data; /**< pointer to data */
+	size_t len; /**< data length */
 };
 
+/** storage area properties masks */
 enum storage_area_properties_mask {
-	STORAGE_AREA_PROP_READONLY = BIT(0),
-	STORAGE_AREA_PROP_FOVRWRITE = BIT(1), /* full overwrite (ram, rram, ...) */
-	STORAGE_AREA_PROP_LOVRWRITE = BIT(2), /* limited overwrite (nor flash) */
-	STORAGE_AREA_PROP_ZEROERASE = BIT(3), /* erased value is 0x00 */
-	STORAGE_AREA_PROP_AUTOERASE = BIT(4), /* erase while writing */
+	/** full overwrite (e.g. ram, rram, ...) */
+	STORAGE_AREA_PROP_FOVRWRITE = BIT(0),
+	/** limited overwrite (e.g. nor flash without crc */
+	STORAGE_AREA_PROP_LOVRWRITE = BIT(1),
+	/** erase value is 0x00 */
+	STORAGE_AREA_PROP_ZEROERASE = BIT(2),
+	/** erase while writing on flash devices */
+	STORAGE_AREA_PROP_AUTOERASE = BIT(3),
 };
 
+/** storage area ioctl commands */
 enum storage_area_ioctl_cmd {
 	STORAGE_AREA_IOCTL_NONE,
-	STORAGE_AREA_IOCTL_XIPADDRESS, /* retrieve the storage area xip address */
+	/** retrieve the storage area xip address */
+	STORAGE_AREA_IOCTL_XIPADDRESS,
 };
 
-/**
- * @brief storage_area API
- *
- * API to access storage area.
- */
+/** storage area api */
 struct storage_area_api {
 	int (*readv)(const struct storage_area *area, sa_off_t offset,
 		     const struct storage_area_iovec *iovec, size_t iovcnt);
 	int (*writev)(const struct storage_area *area, sa_off_t offset,
-		    const struct storage_area_iovec *iovec, size_t iovcnt);
+		      const struct storage_area_iovec *iovec, size_t iovcnt);
 	int (*erase)(const struct storage_area *area, size_t sblk, size_t bcnt);
 	int (*ioctl)(const struct storage_area *area,
 		     enum storage_area_ioctl_cmd cmd, void *data);
 };
 
-/**
- * @brief storage_area struct
- */
+/** storage area */
 struct storage_area {
 	const struct storage_area_api *api;
 	size_t write_size;
 	size_t erase_size;
 	size_t erase_blocks;
-	uint32_t props; /* bitfield of storage area properties */
+	/** bitfield of properties */
+	uint32_t props;
 };
 
-/**
- * @brief storage_area macros
- */
 #define STORAGE_AREA_HAS_PROPERTY(area, prop) ((area->props & prop) == prop)
 #define STORAGE_AREA_WRITESIZE(area)          area->write_size
 #define STORAGE_AREA_ERASESIZE(area)          area->erase_size
-#define STORAGE_AREA_SIZE(area)							\
+#define STORAGE_AREA_SIZE(area)                                                 \
 	(area->erase_size * area->erase_blocks)
-#define STORAGE_AREA_READONLY(area)                                             \
-	STORAGE_AREA_HAS_PROPERTY(area, STORAGE_AREA_PROP_READONLY)
 #define STORAGE_AREA_FOVRWRITE(area)                                            \
 	STORAGE_AREA_HAS_PROPERTY(area, STORAGE_AREA_PROP_FOVRWRITE)
 #define STORAGE_AREA_LOVRWRITE(area)                                            \
 	STORAGE_AREA_HAS_PROPERTY(area, STORAGE_AREA_PROP_LOVRWRITE)
 #define STORAGE_AREA_ERASEVALUE(area)                                           \
-	STORAGE_AREA_HAS_PROPERTY(area, STORAGE_AREA_PROP_ZEROERASE) ?		\
-	0x00 : 0xff
-#define STORAGE_AREA_AUTOERASE(area)						\
+	STORAGE_AREA_HAS_PROPERTY(area, STORAGE_AREA_PROP_ZEROERASE) ? 0x00     \
+								     : 0xff
+#define STORAGE_AREA_AUTOERASE(area)                                            \
 	STORAGE_AREA_HAS_PROPERTY(area, STORAGE_AREA_PROP_AUTOERASE)
 
-#define GET_STORAGE_AREA(_name)							\
+/**
+ * @brief retrieve a pointer to a storage area
+ *
+ * @param _name the name of the storage area
+ */
+#define GET_STORAGE_AREA(_name)                                                 \
 	(struct storage_area *)&_storage_area_##_name.area
+
 /**
  * @brief	 Read iovec from storage area.
  *

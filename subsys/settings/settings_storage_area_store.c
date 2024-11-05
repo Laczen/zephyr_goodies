@@ -261,6 +261,9 @@ static int settings_sas_save(struct settings_store *store, const char *name,
 			.len = val_len,
 		},
 	};
+	const struct storage_area_store_compact_cb cb = {
+		.move = settings_sas_move,
+	};
 	int rc = 0;
 
 	for (size_t i = 0; i < sa_store->sector_cnt; i++) {
@@ -269,7 +272,7 @@ static int settings_sas_save(struct settings_store *store, const char *name,
 			break;
 		}
 
-		rc = storage_area_store_compact(sa_store);
+		rc = storage_area_store_compact(sa_store, &cb);
 		if (rc != 0) {
 			break;
 		}

@@ -8,6 +8,12 @@ menuconfig STORAGE_AREA
 
 if STORAGE_AREA
 
+config STORAGE_AREA_OFFSET_64BIT
+	bool "Large storage area addressing"
+	default y if 64BIT
+	help
+	  Enable 64bit addressing range.
+
 config STORAGE_AREA_VERIFY
 	bool "Verification support"
 	default y if DEBUG
@@ -48,33 +54,9 @@ if STORAGE_AREA_STORE
 
 config STORAGE_AREA_STORE_SEMAPHORE
 	bool "Thread safety using semaphore"
-	default y if (MULTITHREADING && !STORAGE_AREA_STORE_READONLY)
+	default y if MULTITHREADING
 	help
 	  Use a semaphore for multithreading.
-
-config STORAGE_AREA_STORE_DISABLECOMPACT
-	bool "Disable compacting"
-	help
-	  Disable compacting a storage area store, using the
-	  store as just a buffer. This will set the spare
-	  sector count to 0. This configuration is valid
-	  for ALL storage area stores.
-
-config STORAGE_AREA_STORE_READONLY
-	bool "Disable writing"
-	select STORAGE_AREA_STORE_DISABLECOMPACT
-	help
-	  Disable the ability to write to a storage area store.
-	  This configuration is valid for ALL storage area
-	  stores.
-
-config STORAGE_AREA_STORE_DISABLEFBUPDATE
-	bool "Disable first byte update"
-	help
-	  Disable the ability to update the first byte of data
-	  that is used typically to invalidate a record when
-	  it is possible to rewrite. This configuration option
-	  is valid for ALL storage area stores.
 
 endif #STORAGE_AREA_STORE
 

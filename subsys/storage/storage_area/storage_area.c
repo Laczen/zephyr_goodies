@@ -38,7 +38,8 @@ static size_t sa_iovec_size(const struct storage_area_iovec *iovec,
 int storage_area_readv(const struct storage_area *area, sa_off_t offset,
 		       const struct storage_area_iovec *iovec, size_t iovcnt)
 {
-	if ((area == NULL) || (area->api == NULL) || (area->api->readv == NULL)) {
+	if ((area == NULL) || (area->api == NULL) ||
+	    (area->api->readv == NULL)) {
 		return -ENOTSUP;
 	}
 
@@ -65,7 +66,8 @@ int storage_area_read(const struct storage_area *area, sa_off_t offset,
 int storage_area_writev(const struct storage_area *area, sa_off_t offset,
 			const struct storage_area_iovec *iovec, size_t iovcnt)
 {
-	if ((area == NULL) || (area->api == NULL) || (area->api->writev == NULL)) {
+	if ((area == NULL) || (area->api == NULL) ||
+	    (area->api->writev == NULL)) {
 		return -ENOTSUP;
 	}
 
@@ -74,11 +76,6 @@ int storage_area_writev(const struct storage_area *area, sa_off_t offset,
 	if ((!sa_range_valid(area, offset, len)) ||
 	    (((len & (area->write_size - 1)) != 0U))) {
 		return -EINVAL;
-	}
-
-	if (STORAGE_AREA_READONLY(area)) {
-		LOG_DBG("prog not supported (read-only)");
-		return -EROFS;
 	}
 
 	return area->api->writev(area, offset, iovec, iovcnt);
@@ -95,8 +92,7 @@ int storage_area_write(const struct storage_area *area, sa_off_t offset,
 	return storage_area_writev(area, offset, &wr, 1U);
 }
 
-int storage_area_erase(const struct storage_area *area, size_t sblk,
-		       size_t bcnt)
+int storage_area_erase(const struct storage_area *area, size_t sblk, size_t bcnt)
 {
 	if ((area == NULL) || (area->api == NULL) ||
 	    (area->api->erase == NULL)) {
@@ -108,11 +104,6 @@ int storage_area_erase(const struct storage_area *area, size_t sblk,
 	if ((ablocks < bcnt) || ((ablocks - bcnt) < sblk)) {
 		LOG_DBG("invalid range");
 		return -EINVAL;
-	}
-
-	if (STORAGE_AREA_READONLY(area)) {
-		LOG_DBG("erase not supported (read-only)");
-		return -EROFS;
 	}
 
 	return area->api->erase(area, sblk, bcnt);

@@ -26,7 +26,7 @@ LOG_MODULE_REGISTER(sas_test);
 #define AREA_ERASE_SIZE 4096
 #define AREA_WRITE_SIZE 4
 
-STORAGE_AREA_FLASH_DEFINE(test, FLASH_AREA_DEVICE, FLASH_AREA_OFFSET,
+STORAGE_AREA_FLASH_RW_DEFINE(test, FLASH_AREA_DEVICE, FLASH_AREA_OFFSET,
 	FLASH_AREA_XIP, AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE,
 	STORAGE_AREA_PROP_LOVRWRITE);
 
@@ -34,9 +34,8 @@ const char cookie[] = "!NVS";
 
 #define SECTOR_SIZE 1024
 /* This storage area store is using only 1 erase block */
-STORAGE_AREA_STORE_DEFINE(test, GET_STORAGE_AREA(test), (void *)cookie,
-	sizeof(cookie), SECTOR_SIZE, AREA_ERASE_SIZE / SECTOR_SIZE, 0U, 1U,
-	NULL, NULL, NULL);
+STORAGE_AREA_STORE_SCB_DEFINE(test, GET_STORAGE_AREA(test), (void *)cookie,
+	sizeof(cookie), SECTOR_SIZE, AREA_ERASE_SIZE / SECTOR_SIZE, 1U);
 
 struct __attribute__((packed)) data_format {
 	uint8_t state;

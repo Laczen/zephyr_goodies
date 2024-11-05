@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/* Test for the storage_area_store API */
+/* Test for the storage_area_store settings backend */
 
 #include <string.h>
 #include <zephyr/kernel.h>
@@ -21,46 +21,23 @@ LOG_MODULE_REGISTER(sas_test);
 #define FLASH_AREA_OFFSET	DT_REG_ADDR(FLASH_AREA_NODE)
 #define FLASH_AREA_DEVICE							\
 	DEVICE_DT_GET(DT_MTD_FROM_FIXED_PARTITION(FLASH_AREA_NODE))
-#define FLASH_AREA_XIP		FLASH_AREA_OFFSET + 				\
+#define FLASH_AREA_XIP		FLASH_AREA_OFFSET +				\
 	DT_REG_ADDR(DT_MTD_FROM_FIXED_PARTITION(FLASH_AREA_NODE))
 #define AREA_SIZE		DT_REG_SIZE(FLASH_AREA_NODE)
 #define AREA_ERASE_SIZE		4096
 #define AREA_WRITE_SIZE		8
 
-STORAGE_AREA_FLASH_DEFINE(test,	FLASH_AREA_DEVICE, FLASH_AREA_OFFSET,
+STORAGE_AREA_FLASH_RW_DEFINE(test, FLASH_AREA_DEVICE, FLASH_AREA_OFFSET,
 	FLASH_AREA_XIP, AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE,
-	STORAGE_AREA_PROP_LOVRWRITE);
+	STORAGE_AREA_PROP_LOVRWRITE | STORAGE_AREA_PROP_AUTOERASE);
 #endif /* CONFIG_STORAGE_AREA_FLASH */
-
-#ifdef CONFIG_STORAGE_AREA_EEPROM
-#include <zephyr/storage/storage_area/storage_area_eeprom.h>
-#define EEPROM_NODE		DT_ALIAS(eeprom_0)
-#define EEPROM_AREA_DEVICE	DEVICE_DT_GET(EEPROM_NODE)
-#define AREA_SIZE		DT_PROP(EEPROM_NODE, size)
-#define AREA_ERASE_SIZE		1024
-#define AREA_WRITE_SIZE		4
-
-STORAGE_AREA_EEPROM_DEFINE(test, EEPROM_AREA_DEVICE, 0U, AREA_WRITE_SIZE,
-			   AREA_ERASE_SIZE, AREA_SIZE, 0);
-#endif /* CONFIG_STORAGE_AREA_EEPROM */
-
-#ifdef CONFIG_STORAGE_AREA_RAM
-#include <zephyr/storage/storage_area/storage_area_ram.h>
-#define RAM_NODE		DT_NODELABEL(storage_sram)
-#define AREA_SIZE		DT_REG_SIZE(RAM_NODE)
-#define AREA_ERASE_SIZE		4096
-#define AREA_WRITE_SIZE		4
-
-STORAGE_AREA_RAM_DEFINE(test, DT_REG_ADDR(RAM_NODE), AREA_WRITE_SIZE,
-			AREA_ERASE_SIZE, AREA_SIZE, 0);
-#endif /* CONFIG_STORAGE_AREA_RAM */
 
 const char cookie[]="!NVS";
 
 #define SECTOR_SIZE 1024
-STORAGE_AREA_STORE_DEFINE(test, GET_STORAGE_AREA(test), (void *)cookie, sizeof(cookie),
-			  SECTOR_SIZE, AREA_SIZE / SECTOR_SIZE,
-			  AREA_ERASE_SIZE / SECTOR_SIZE, 0U, NULL, NULL, NULL);
+STORAGE_AREA_STORE_PCB_DEFINE(test, GET_STORAGE_AREA(test), (void *)cookie,
+			      sizeof(cookie), SECTOR_SIZE, AREA_SIZE / SECTOR_SIZE,
+			      AREA_ERASE_SIZE / SECTOR_SIZE, 0U);
 
 create_settings_storage_area_store(test, GET_STORAGE_AREA_STORE(test));
 

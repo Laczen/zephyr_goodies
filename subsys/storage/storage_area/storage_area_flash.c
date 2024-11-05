@@ -67,65 +67,66 @@ static int sa_flash_readv(const struct storage_area *area, sa_off_t offset,
 		goto end;
 	}
 
-	offset += flash->doffset;
+	off_t rdoff = flash->doffset + (off_t)offset;
 
 	for (size_t i = 0U; i < iovcnt; i++) {
-		rc = flash_read(flash->dev, offset, iovec[i].data, iovec[i].len);
+		rc = flash_read(flash->dev, rdoff, iovec[i].data, iovec[i].len);
 		if (rc != 0) {
 			break;
 		}
 
-		offset += iovec[i].len;
+		rdoff += iovec[i].len;
 	}
 
 	if (rc != 0) {
-		LOG_DBG("read failed at %x", offset - flash->doffset);
+		LOG_DBG("read failed at 0x%lx", rdoff - flash->doffset);
 	}
 end:
 	return rc;
 }
 
-static int sa_flash_write(const struct storage_area_flash *flash, sa_off_t offset,
-			  const uint8_t *data, size_t len)
+static int sa_flash_write(const struct storage_area_flash *flash,
+			  sa_off_t offset, const uint8_t *data, size_t len)
 {
 	const struct storage_area *area = &flash->area;
+	off_t wroff = flash->doffset + (off_t)offset;
 
-	offset += flash->doffset;
-
-	if ((!STORAGE_AREA_AUTOERASE(area)) ||
-	    (STORAGE_AREA_FOVRWRITE(area))) {
-		return flash_write(flash->dev, offset, data, len);
+	if ((!STORAGE_AREA_AUTOERASE(area)) || (STORAGE_AREA_FOVRWRITE(area))) {
+		return flash_write(flash->dev, wroff, data, len);
 	}
 
 	int rc = 0;
 
 	while (len != 0U) {
 		const size_t esz = area->erase_size;
-		const size_t wrlen = MIN(esz - (offset & (esz - 1)), len);
+		const size_t wrlen = MIN(esz - (wroff & (esz - 1)), len);
 
-		if ((offset & (esz - 1)) == 0U) {
-			rc = flash_erase(flash->dev, offset, esz);
+		if ((wroff & (esz - 1)) == 0U) {
+			rc = flash_erase(flash->dev, wroff, esz);
 			if (rc != 0) {
 				break;
 			}
 		}
 
-		rc = flash_write(flash->dev, offset, data, wrlen);
+		rc = flash_write(flash->dev, wroff, data, wrlen);
 		if (rc != 0) {
 			break;
 		}
 
-		offset += wrlen;
+		wroff += wrlen;
 		data += wrlen;
 		len -= wrlen;
+	}
+
+	if (rc != 0) {
+		LOG_DBG("prog failed at 0x%lx", wroff - flash->doffset);
 	}
 
 	return rc;
 }
 
 static int sa_flash_writev(const struct storage_area *area, sa_off_t offset,
-			   const struct storage_area_iovec *iovec,
-			   size_t iovcnt)
+			   const struct storage_area_iovec *iovec, size_t iovcnt)
 {
 	const struct storage_area_flash *flash =
 		CONTAINER_OF(area, struct storage_area_flash, area);
@@ -179,10 +180,6 @@ static int sa_flash_writev(const struct storage_area *area, sa_off_t offset,
 			bpos = blen;
 		}
 	}
-
-	if (rc != 0) {
-		LOG_DBG("prog failed at %x", offset);
-	}
 end:
 	return rc;
 }
@@ -198,12 +195,12 @@ static int sa_flash_erase(const struct storage_area *area, size_t sblk,
 		goto end;
 	}
 
-	const off_t offset = flash->doffset + sblk * area->erase_size;
+	const off_t eoff = flash->doffset + sblk * area->erase_size;
 	const size_t esize = bcnt * area->erase_size;
 
-	rc = flash_erase(flash->dev, offset, esize);
+	rc = flash_erase(flash->dev, eoff, esize);
 	if (rc != 0) {
-		LOG_DBG("erase failed at %x", offset - flash->doffset);
+		LOG_DBG("erase failed at 0x%lx", eoff - flash->doffset);
 	}
 end:
 	return rc;
@@ -246,9 +243,14 @@ end:
 	return rc;
 }
 
-const struct storage_area_api storage_area_flash_api = {
+const struct storage_area_api storage_area_flash_rw_api = {
 	.readv = sa_flash_readv,
 	.writev = sa_flash_writev,
 	.erase = sa_flash_erase,
+	.ioctl = sa_flash_ioctl,
+};
+
+const struct storage_area_api storage_area_flash_ro_api = {
+	.readv = sa_flash_readv,
 	.ioctl = sa_flash_ioctl,
 };

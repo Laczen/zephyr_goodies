@@ -43,19 +43,20 @@ static int sa_eeprom_readv(const struct storage_area *area, sa_off_t offset,
 		goto end;
 	}
 
-	offset += eeprom->doffset;
+	off_t rdoff = eeprom->doffset + (off_t)offset;
+
 	for (size_t i = 0U; i < iovcnt; i++) {
-		rc = eeprom_read(eeprom->dev, offset, iovec[i].data,
+		rc = eeprom_read(eeprom->dev, rdoff, iovec[i].data,
 				 iovec[i].len);
 		if (rc != 0) {
 			break;
 		}
 
-		offset += iovec[i].len;
+		rdoff += iovec[i].len;
 	}
 
 	if (rc != 0) {
-		LOG_DBG("read failed at %x", offset - eeprom->doffset);
+		LOG_DBG("read failed at %lx", rdoff - eeprom->doffset);
 	}
 end:
 	return rc;
@@ -76,7 +77,8 @@ static int sa_eeprom_writev(const struct storage_area *area, sa_off_t offset,
 		goto end;
 	}
 
-	offset += eeprom->doffset;
+	off_t wroff = eeprom->doffset + (off_t)offset;
+	
 	for (size_t i = 0U; i < iovcnt; i++) {
 		uint8_t *data8 = (uint8_t *)iovec[i].data;
 		size_t blen = iovec[i].len;
@@ -90,13 +92,13 @@ static int sa_eeprom_writev(const struct storage_area *area, sa_off_t offset,
 			data8 += cplen;
 
 			if (bpos == align) {
-				rc = eeprom_write(eeprom->dev, offset, buf,
+				rc = eeprom_write(eeprom->dev, wroff, buf,
 						  align);
 				if (rc != 0) {
 					break;
 				}
 
-				offset += align;
+				wroff += align;
 				bpos = 0U;
 			}
 		}
@@ -104,14 +106,14 @@ static int sa_eeprom_writev(const struct storage_area *area, sa_off_t offset,
 		if (blen >= align) {
 			size_t wrlen = blen & ~(align - 1);
 
-			rc = eeprom_write(eeprom->dev, offset, data8, wrlen);
+			rc = eeprom_write(eeprom->dev, wroff, data8, wrlen);
 			if (rc != 0) {
 				break;
 			}
 
 			blen -= wrlen;
 			data8 += wrlen;
-			offset += wrlen;
+			wroff += wrlen;
 		}
 
 		if (blen > 0U) {
@@ -121,7 +123,7 @@ static int sa_eeprom_writev(const struct storage_area *area, sa_off_t offset,
 	}
 
 	if (rc != 0) {
-		LOG_DBG("write failed at %x", offset - eeprom->doffset);
+		LOG_DBG("write failed at %lx", wroff - eeprom->doffset);
 	}
 end:
 	return rc;
@@ -132,7 +134,7 @@ static int sa_eeprom_erase(const struct storage_area *area, size_t sblk,
 {
 	const struct storage_area_eeprom *eeprom =
 		CONTAINER_OF(area, struct storage_area_eeprom, area);
-	sa_off_t offset = eeprom->doffset + sblk * area->erase_size;
+	off_t eoff = eeprom->doffset + sblk * area->erase_size;
 	uint8_t buf[area->erase_size];
 	int rc = sa_eeprom_valid(eeprom);
 
@@ -142,16 +144,16 @@ static int sa_eeprom_erase(const struct storage_area *area, size_t sblk,
 
 	memset(buf, STORAGE_AREA_ERASEVALUE(area), sizeof(buf));
 	for (size_t i = 0; i < bcnt; i++) {
-		rc = eeprom_write(eeprom->dev, offset, buf, sizeof(buf));
+		rc = eeprom_write(eeprom->dev, eoff, buf, sizeof(buf));
 		if (rc != 0) {
 			break;
 		}
 
-		offset += area->erase_size;
+		eoff += area->erase_size;
 	}
 
 	if (rc != 0) {
-		LOG_DBG("write failed at %x", offset - eeprom->doffset);
+		LOG_DBG("write failed at %lx", eoff - eeprom->doffset);
 	}
 end:
 	return rc;
@@ -177,9 +179,14 @@ end:
 	return rc;
 }
 
-const struct storage_area_api storage_area_eeprom_api = {
+const struct storage_area_api storage_area_eeprom_rw_api = {
 	.readv = sa_eeprom_readv,
 	.writev = sa_eeprom_writev,
 	.erase = sa_eeprom_erase,
+	.ioctl = sa_eeprom_ioctl,
+};
+
+const struct storage_area_api storage_area_eeprom_ro_api = {
+	.readv = sa_eeprom_readv,
 	.ioctl = sa_eeprom_ioctl,
 };

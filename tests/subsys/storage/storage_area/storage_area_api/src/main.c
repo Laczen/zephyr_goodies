@@ -26,7 +26,7 @@ LOG_MODULE_REGISTER(sa_api_test);
 #define AREA_ERASE_SIZE		4096
 #define AREA_WRITE_SIZE		512
 
-STORAGE_AREA_FLASH_DEFINE(test, FLASH_AREA_DEVICE, FLASH_AREA_OFFSET,
+STORAGE_AREA_FLASH_RW_DEFINE(test, FLASH_AREA_DEVICE, FLASH_AREA_OFFSET,
 	FLASH_AREA_XIP, AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE,
 	STORAGE_AREA_PROP_LOVRWRITE);
 #endif /* CONFIG_STORAGE_AREA_FLASH */
@@ -39,7 +39,7 @@ STORAGE_AREA_FLASH_DEFINE(test, FLASH_AREA_DEVICE, FLASH_AREA_OFFSET,
 #define AREA_ERASE_SIZE		1024
 #define AREA_WRITE_SIZE		4
 
-STORAGE_AREA_EEPROM_DEFINE(test, EEPROM_AREA_DEVICE, 0U, AREA_WRITE_SIZE,
+STORAGE_AREA_EEPROM_RW_DEFINE(test, EEPROM_AREA_DEVICE, 0U, AREA_WRITE_SIZE,
 	AREA_ERASE_SIZE, AREA_SIZE, 0);
 #endif /* CONFIG_STORAGE_AREA_EEPROM */
 
@@ -50,7 +50,7 @@ STORAGE_AREA_EEPROM_DEFINE(test, EEPROM_AREA_DEVICE, 0U, AREA_WRITE_SIZE,
 #define AREA_ERASE_SIZE	4096
 #define AREA_WRITE_SIZE	4
 
-STORAGE_AREA_RAM_DEFINE(test, DT_REG_ADDR(RAM_NODE), AREA_WRITE_SIZE,
+STORAGE_AREA_RAM_RW_DEFINE(test, DT_REG_ADDR(RAM_NODE), AREA_WRITE_SIZE,
 	AREA_ERASE_SIZE, AREA_SIZE, 0);
 #endif /* CONFIG_STORAGE_AREA_RAM */
 
@@ -64,7 +64,7 @@ STORAGE_AREA_RAM_DEFINE(test, DT_REG_ADDR(RAM_NODE), AREA_WRITE_SIZE,
 #define AREA_ERASE_SIZE	DISK_SSIZE
 #define AREA_WRITE_SIZE	DISK_SSIZE
 
-STORAGE_AREA_DISK_DEFINE(test, DISK_NAME, DISK_SCNT / 2, DISK_SSIZE,
+STORAGE_AREA_DISK_RW_DEFINE(test, DISK_NAME, DISK_SCNT / 2, DISK_SSIZE,
 	AREA_WRITE_SIZE, AREA_ERASE_SIZE, AREA_SIZE, 0);
 #endif /* CONFIG_STORAGE_AREA_DISK */
 
@@ -80,7 +80,7 @@ static void storage_area_api_before(void *fixture)
 	const struct storage_area *sa = GET_STORAGE_AREA(test);
 	int rc = storage_area_erase(sa, 0, 1);
 
-	zassert_equal(rc, 0, "erase returned [%d]", rc);
+	zassert_ok(rc, "erase returned [%d]", rc);
 }
 
 ZTEST_USER(storage_area_api, test_read_write_simple)
@@ -103,12 +103,12 @@ ZTEST_USER(storage_area_api, test_read_write_simple)
 	memset(rd, 0, sizeof(rd));
 
 	rc = storage_area_writev(sa, 0U, &wrvec, 1U);
-	zassert_equal(rc, 0, "prog returned [%d]", rc);
+	zassert_ok(rc, "prog returned [%d]", rc);
 
 	rc = storage_area_readv(sa, 0U, &rdvec, 1U);
-	zassert_equal(rc, 0, "read returned [%d]", rc);
+	zassert_ok(rc, "read returned [%d]", rc);
 
-	zassert_equal(memcmp(rd, wr, sizeof(wr)), 0, "data mismatch");
+	zassert_mem_equal(rd, wr, sizeof(wr), 0, "data mismatch");
 }
 
 ZTEST_USER(storage_area_api, test_read_write_direct)
@@ -122,12 +122,12 @@ ZTEST_USER(storage_area_api, test_read_write_direct)
 	memset(rd, 0, sizeof(rd));
 
 	rc = storage_area_write(sa, 0U, wr, sizeof(wr));
-	zassert_equal(rc, 0, "prog returned [%d]", rc);
+	zassert_ok(rc, "prog returned [%d]", rc);
 
 	rc = storage_area_read(sa, 0U, rd, sizeof(rd));
-	zassert_equal(rc, 0, "read returned [%d]", rc);
+	zassert_ok(rc, "read returned [%d]", rc);
 
-	zassert_equal(memcmp(rd, wr, sizeof(wr)), 0, "data mismatch");
+	zassert_mem_equal(rd, wr, sizeof(wr), 0, "data mismatch");
 }
 
 ZTEST_USER(storage_area_api, test_read_write_blocks)
@@ -168,13 +168,13 @@ ZTEST_USER(storage_area_api, test_read_write_blocks)
 	memset(rd, 0, sizeof(rd));
 
 	rc = storage_area_writev(sa, 0U, wrvec, ARRAY_SIZE(wrvec));
-	zassert_equal(rc, 0, "prog returned [%d]", rc);
+	zassert_ok(rc, "prog returned [%d]", rc);
 
 	rc = storage_area_readv(sa, 0U, rdvec, ARRAY_SIZE(rdvec));
-	zassert_equal(rc, 0, "read returned [%d]", rc);
+	zassert_ok(rc, "read returned [%d]", rc);
 
 	zassert_equal(magic, 0xA0, "magic has changed");
-	zassert_equal(memcmp(rd, wr, sizeof(wr)), 0, "data mismatch");
+	zassert_mem_equal(rd, wr, sizeof(wr), 0, "data mismatch");
 }
 
 ZTEST_USER(storage_area_api, test_ioctl)
@@ -188,7 +188,7 @@ ZTEST_USER(storage_area_api, test_ioctl)
 	    (IS_ENABLED(CONFIG_STORAGE_AREA_EEPROM))) {
 		zassert_equal(rc, -ENOTSUP, "xip returned invalid address");
 	} else {
-		zassert_equal(rc, 0, "xip returned no address");
+		zassert_ok(rc, "xip returned no address");
 	}
 }
 

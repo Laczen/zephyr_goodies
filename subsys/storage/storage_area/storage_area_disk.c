@@ -70,8 +70,8 @@ static int sa_disk_readv(const struct storage_area *area, sa_off_t offset,
 {
 	const struct storage_area_disk *disk =
 		CONTAINER_OF(area, struct storage_area_disk, area);
-	size_t starts = offset / disk->ssize;
-	size_t bpos = offset % disk->ssize;
+	uint32_t starts = offset / disk->ssize;
+	uint32_t bpos = offset % disk->ssize;
 	uint8_t buf[disk->ssize];
 	int rc = sa_disk_valid(disk);
 
@@ -111,7 +111,7 @@ static int sa_disk_readv(const struct storage_area *area, sa_off_t offset,
 	}
 
 	if (rc != 0) {
-		LOG_DBG("read failed at %x",
+		LOG_DBG("read failed at %lx",
 			(starts - disk->start) * disk->ssize);
 	}
 end:
@@ -124,10 +124,10 @@ static int sa_disk_writev(const struct storage_area *area, sa_off_t offset,
 	const struct storage_area_disk *disk =
 		CONTAINER_OF(area, struct storage_area_disk, area);
 	const size_t align = area->write_size;
-	const size_t spws = align / disk->ssize;
+	const uint32_t spws = align / disk->ssize;
 	uint8_t buf[align];
 	size_t bpos = 0U;
-	size_t starts = offset / disk->ssize;
+	uint32_t starts = offset / disk->ssize;
 	int rc = sa_disk_valid(disk);
 
 	if (rc != 0) {
@@ -161,7 +161,7 @@ static int sa_disk_writev(const struct storage_area *area, sa_off_t offset,
 
 		if (blen >= align) {
 			size_t wrlen = blen & ~(align - 1);
-			size_t wrs = wrlen / disk->ssize;
+			uint32_t wrs = wrlen / disk->ssize;
 
 			rc = disk_access_write(disk->name, data8, starts, wrs);
 			if (rc != 0) {
@@ -180,7 +180,7 @@ static int sa_disk_writev(const struct storage_area *area, sa_off_t offset,
 	}
 
 	if (rc != 0) {
-		LOG_DBG("write failed at %x",
+		LOG_DBG("write failed at %lx",
 			(starts - disk->start) * disk->ssize);
 	}
 end:
@@ -192,8 +192,8 @@ static int sa_disk_erase(const struct storage_area *area, size_t sblk,
 {
 	const struct storage_area_disk *disk =
 		CONTAINER_OF(area, struct storage_area_disk, area);
-	const size_t spws = area->erase_size / disk->ssize;
-	size_t starts = disk->start + sblk * spws;
+	const uint32_t spws = area->erase_size / disk->ssize;
+	uint32_t starts = disk->start + sblk * spws;
 	uint8_t buf[area->erase_size];
 	int rc = sa_disk_valid(disk);
 
@@ -239,9 +239,14 @@ end:
 	return rc;
 }
 
-const struct storage_area_api storage_area_disk_api = {
+const struct storage_area_api storage_area_disk_rw_api = {
 	.readv = sa_disk_readv,
 	.writev = sa_disk_writev,
 	.erase = sa_disk_erase,
+	.ioctl = sa_disk_ioctl,
+};
+
+const struct storage_area_api storage_area_disk_ro_api = {
+	.readv = sa_disk_readv,
 	.ioctl = sa_disk_ioctl,
 };
