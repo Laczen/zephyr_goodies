@@ -34,8 +34,8 @@ const char cookie[] = "!NVS";
 
 #define SECTOR_SIZE 1024
 /* This storage area store is using only 1 erase block */
-STORAGE_AREA_STORE_SCB_DEFINE(test, GET_STORAGE_AREA(test), (void *)cookie,
-	sizeof(cookie), SECTOR_SIZE, AREA_ERASE_SIZE / SECTOR_SIZE, 1U);
+STORAGE_AREA_STORE_DEFINE(test, GET_STORAGE_AREA(test), (void *)cookie,
+	sizeof(cookie), SECTOR_SIZE, AREA_ERASE_SIZE / SECTOR_SIZE, 0U, 1U);
 
 struct __attribute__((packed)) data_format {
 	uint8_t state;
@@ -44,7 +44,7 @@ struct __attribute__((packed)) data_format {
 
 static int storage_area_store_init(const struct storage_area_store *store)
 {
-	int rc = storage_area_store_mount(store, NULL);
+	int rc = storage_area_store_mount_cb(store);
 
 	if (rc != 0) {
 		return rc;

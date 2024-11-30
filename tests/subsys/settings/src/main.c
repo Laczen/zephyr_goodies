@@ -35,9 +35,9 @@ STORAGE_AREA_FLASH_RW_DEFINE(test, FLASH_AREA_DEVICE, FLASH_AREA_OFFSET,
 const char cookie[]="!NVS";
 
 #define SECTOR_SIZE 1024
-STORAGE_AREA_STORE_PCB_DEFINE(test, GET_STORAGE_AREA(test), (void *)cookie,
-			      sizeof(cookie), SECTOR_SIZE, AREA_SIZE / SECTOR_SIZE,
-			      AREA_ERASE_SIZE / SECTOR_SIZE, 0U);
+STORAGE_AREA_STORE_DEFINE(test, GET_STORAGE_AREA(test), (void *)cookie,
+			  sizeof(cookie), SECTOR_SIZE, AREA_SIZE / SECTOR_SIZE,
+			  AREA_ERASE_SIZE / SECTOR_SIZE, 0U);
 
 create_settings_storage_area_store(test, GET_STORAGE_AREA_STORE(test));
 
@@ -49,7 +49,7 @@ static void *settings_storage_area_store_api_setup(void)
 static void settings_storage_area_store_api_before(void *fixture)
 {
 	ARG_UNUSED(fixture);
-	
+
 	int rc = storage_area_erase(GET_STORAGE_AREA(test), 0, 1);
 
 	zassert_equal(rc, 0, "erase returned [%d]", rc);
@@ -128,7 +128,7 @@ ZTEST_USER(settings_storage_area_store_api, test_store)
 	rc = settings_save_one("data/test", &val, sizeof(val));
 	zassert_equal(rc, 0, "save one returned [%d]", rc);
 	zassert_equal(loc, sstore->sa_store->data->loc, "Wrong data loc");
-	
+
 	/* Add values until storage is wrapped, no data should be lost */
 	while (settings_save_one("data/test", &val, sizeof(val)) == 0) {
 	 	if (sstore->sa_store->data->wrapcnt != 1) {

@@ -42,10 +42,36 @@
  * - Read-only record store: when only reading is required,
  * .
  *
- * A Persistent circular buffer store is defined and retrieved as:
+ * A persistent circular buffer store is defined, retrieved and mounted as:
  * @code{.c}
- * STORAGE_AREA_STORE_PCB_DEFINE(name, ...);
+ * STORAGE_AREA_STORE_DEFINE(name, ...);
+ * struct storage_area_store_compact_cb = {
+ *         .move = ...,
+ *         .move_cb = ...,
+ * };
  * struct storage_area_store *store = GET_STORAGE_AREA_STORE(name);
+ * int rc = storage_area_store_mount(store, &cb);
+ * @endcode
+ *
+ * Before the first usage of a storage area store it is best practice to issue
+ * a wipe command to remove any existing data:
+ * @code{.c}
+ * struct storage_area_store *store = GET_STORAGE_AREA_STORE(name);
+ * int rc = storage_area_store_wipe(store);
+ * @endcode
+ *
+ * A simple circular buffer store is defined, retrieved and mounted as:
+ * @code{.c}
+ * STORAGE_AREA_STORE_DEFINE(name, ...);
+ * struct storage_area_store *store = GET_STORAGE_AREA_STORE(name);
+ * int rc = storage_area_store_mount_cb(store);
+ * @endcode
+ *
+ * A read only storage area store is defined, retrieved and mounted as:
+ * @code{.c}
+ * STORAGE_AREA_STORE_DEFINE(name, ...);
+ * struct storage_area_store *store = GET_STORAGE_AREA_STORE(name);
+ * int rc = storage_area_store_mount_ro(store);
  * @endcode
  *
  * The part of data that is not included in the crc calculation can be updated
@@ -86,29 +112,18 @@ struct storage_area_store_compact_cb {
 
 struct storage_area_store;
 
-struct storage_area_store_api {
-	/* mount routine should always be defined, cb is NULL
-	 * for read-only or simple circular buffer.
-	 */
-	int (*mount)(const struct storage_area_store *store,
-		     const struct storage_area_store_compact_cb *cb);
-	/* writev routine should be NULL for read-only, needs
-	 * definition for simple or persistent circular buffer.
-	 */
-	int (*writev)(const struct storage_area_store *store,
-		      const struct storage_area_iovec *iovec, size_t iovcnt);
-	/* advance routine should be NULL for read-only, needs
-	 * definition for simple or persistent circular buffer,
-	 * for simple circular buffer cb is NULL.
-	 */
-	int (*advance)(const struct storage_area_store *store,
-		       const struct storage_area_store_compact_cb *cb);
-};
-
 struct storage_area_store_data {
 #ifdef CONFIG_STORAGE_AREA_STORE_SEMAPHORE
 	struct k_sem semaphore;
 #endif
+	/**
+	 * assigned during mount (internally used), the advance method is NULL
+	 * for a read-only storage area store and is used to check if a write
+	 * can be performed.
+	 */
+	int (*advance)(const struct storage_area_store *store,
+		       const struct storage_area_store_compact_cb *cb);
+	/** */
 	bool ready;
 	/** current write sector */
 	size_t sector;
@@ -120,7 +135,6 @@ struct storage_area_store_data {
 
 struct storage_area_store {
 	const struct storage_area *area;
-	const struct storage_area_store_api *api;
 	struct storage_area_store_data *data;
 	void *sector_cookie;
 	size_t sector_cookie_size;
@@ -139,7 +153,27 @@ struct storage_area_record {
 };
 
 /**
- * @brief	Mount storage area store.
+ * @brief	Mount storage area store in read-only mode.
+ *
+ * @param store	storage area store.
+ *
+ * @retval	0 on success else negative errno code.
+ */
+int storage_area_store_mount_ro(const struct storage_area_store *store);
+
+/**
+ * @brief	Mount storage area store in circular buffer mode without
+ *              persistence.
+ *
+ * @param store	storage area store.
+ *
+ * @retval	0 on success else negative errno code.
+ */
+int storage_area_store_mount_cb(const struct storage_area_store *store);
+
+/**
+ * @brief	Mount storage area store in circular buffer mode with
+ *              persistence.
  *
  * @param store	storage area store.
  * @param cb	routines used during compacting (can be NULL).
@@ -297,21 +331,17 @@ int storage_area_store_get_sector_cookie(const struct storage_area_store *store,
 /**
  * @brief Helper macro to create a storage area store on top of a storage area
  */
-#define STORAGE_AREA_STORE(_area, _api, _data, _cookie, _cookie_size,           \
-			   _sector_size, _sector_cnt, _spare_sectors,           \
-			   _crc_skip)                                           \
+#define STORAGE_AREA_STORE(_area, _data, _cookie, _cookie_size, _sector_size,   \
+			   _sector_cnt, _spare_sectors, _crc_skip)              \
 	{                                                                       \
-		.area = _area, .api = _api, .data = _data,                      \
-		.sector_cookie = _cookie, .sector_cookie_size = _cookie_size,   \
-		.sector_size = _sector_size, .sector_cnt = _sector_cnt,         \
-		.spare_sectors = _spare_sectors, .crc_skip = _crc_skip,         \
+		.area = _area, .data = _data, .sector_cookie = _cookie,         \
+		.sector_cookie_size = _cookie_size, .sector_size = _sector_size,\
+		.sector_cnt = _sector_cnt, .spare_sectors = _spare_sectors,     \
+		.crc_skip = _crc_skip,                                          \
 	}
 
-/* persistent circular buffer */
-extern const struct storage_area_store_api storage_area_store_pcb_api;
-
 /**
- * @brief Define a persistent circular buffer storage area store
+ * @brief Define a named storage area store
  *
  *        A storage area store is used to store records in constant sized
  *        sectors. It is made persistent by designating a number of sectors
@@ -338,64 +368,13 @@ extern const struct storage_area_store_api storage_area_store_pcb_api;
  *
  */
 
-#define STORAGE_AREA_STORE_PCB_DEFINE(_name, _area, _cookie, _cookie_size,      \
-				      _sector_size, _sector_cnt,                \
-				      _spare_sectors, _crc_skip)                \
+#define STORAGE_AREA_STORE_DEFINE(_name, _area, _cookie, _cookie_size,          \
+				  _sector_size, _sector_cnt, _spare_sectors,    \
+				  _crc_skip)                                    \
 	static struct storage_area_store_data                                   \
 		_storage_area_store_##_name##_data;                             \
 	const struct storage_area_store _storage_area_store_##_name =           \
-		STORAGE_AREA_STORE(_area, &storage_area_store_pcb_api,          \
-				   &(_storage_area_store_##_name##_data),       \
-				   _cookie, _cookie_size, _sector_size,         \
-				   _sector_cnt, _spare_sectors, _crc_skip)
-
-/* simple circular buffer */
-extern const struct storage_area_store_api storage_area_store_scb_api;
-
-/**
- * @brief Define a simple circular buffer storage area store
- *
- *        A simple circular buffer is similar to the persistent circular
- *        buffer (@ref STORAGE_AREA_STORE_PCB_DEFINE) but it does not move
- *        old data, instead it erases or writes over old data. A simple
- *        circular buffer is typically used for storing measurement data in
- *        a fixed size space.
- *        For the parameters see (@ref STORAGE_AREA_PCB_DEFINE), except the
- *        spare sectors that are 0 in this case.
- *
- */
-#define STORAGE_AREA_STORE_SCB_DEFINE(_name, _area, _cookie, _cookie_size,      \
-				      _sector_size, _sector_cnt, _crc_skip)     \
-	static struct storage_area_store_data                                   \
-		_storage_area_store_##_name##_data;                             \
-	const struct storage_area_store _storage_area_store_##_name =           \
-		STORAGE_AREA_STORE(_area, &storage_area_store_scb_api,          \
-				   &(_storage_area_store_##_name##_data),       \
-				   _cookie, _cookie_size, _sector_size,         \
-				   _sector_cnt, 0U, _crc_skip)
-
-/* read-only api */
-extern const struct storage_area_store_api storage_area_store_ro_api;
-
-/**
- * @brief Define a read-only storage area store
- *
- *        When a storage area store is only used to read it can be defined
- *        in read-only mode that reduces the required rom space. The parameters
- *        of the read-only storage area store should be defined in accordance
- *        with the parameters used when creating the storage area store.
- *
- *        For the parameters see (@ref STORAGE_AREA_PCB_DEFINE).
- *
- */
-#define STORAGE_AREA_STORE_RO_DEFINE(_name, _area, _cookie, _cookie_size,       \
-				     _sector_size, _sector_cnt, _spare_sectors, \
-				     _crc_skip)                                 \
-	static struct storage_area_store_data                                   \
-		_storage_area_store_##_name##_data;                             \
-	const struct storage_area_store _storage_area_store_##_name =           \
-		STORAGE_AREA_STORE(_area, &storage_area_store_ro_api,           \
-				   &(_storage_area_store_##_name##_data),       \
+		STORAGE_AREA_STORE(_area, &(_storage_area_store_##_name##_data),\
 				   _cookie, _cookie_size, _sector_size,         \
 				   _sector_cnt, _spare_sectors, _crc_skip)
 

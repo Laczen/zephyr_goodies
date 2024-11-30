@@ -12,12 +12,15 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(storage_area_store, CONFIG_STORAGE_AREA_LOG_LEVEL);
 
-#define SAS_MAGIC      0xF0 /* record magic */
-#define SAS_HDRSIZE    4    /* magic + wrapcnt + size */
+/* record magic: chosen to be different from the erase-value (0x00 or 0xFF) */
+#define SAS_MAGIC      0xF0
+#define SAS_FILLVAL    0xFF
+
+/* header size: record magic (1 BYTE) + wrapcnt (1 BYTE) + size (2 BYTE) */
+#define SAS_HDRSIZE    4
 #define SAS_CRCINIT    0
 #define SAS_CRCSIZE    sizeof(uint32_t)
 #define SAS_MINBUFSIZE 32
-#define SAS_FILLVALUE  0xFF
 
 #define SAS_MIN(a, b)             (a < b ? a : b)
 #define SAS_MAX(a, b)             (a < b ? b : a)
@@ -107,14 +110,15 @@ end:
 }
 
 static int store_record_next_in_sector(struct storage_area_record *record,
-				       bool wrapcheck, bool recover)
+				       bool wrapcheck)
 {
 	const struct storage_area_store *store = record->store;
 	const struct storage_area_store_data *data = store->data;
 	const struct storage_area *area = store->area;
 	const size_t secpos = record->sector * store->sector_size;
-	bool crc_ok = true;
-	int rc = -ENOENT;
+	bool check_crc = false;
+	bool found = false;
+	int rc = 0;
 
 	if ((record->loc == 0U) && (store->sector_cookie != NULL) &&
 	    (store->sector_cookie_size != 0U)) {
@@ -123,11 +127,11 @@ static int store_record_next_in_sector(struct storage_area_record *record,
 		record->loc = SAS_ALIGNUP(cksz, area->write_size);
 	}
 
-	while (true) {
-		uint8_t buf[SAS_HDRSIZE];
+	while (!found) {
+		uint8_t header[SAS_HDRSIZE];
 		struct storage_area_iovec rd = {
-			.data = &buf,
-			.len = sizeof(buf),
+			.data = &header,
+			.len = sizeof(header),
 		};
 		size_t rdpos = record->loc;
 		sa_off_t rdoff;
@@ -141,7 +145,6 @@ static int store_record_next_in_sector(struct storage_area_record *record,
 		    (rdpos == store->sector_size)) {
 			record->loc = rdpos;
 			record->size = 0U;
-			rc = -ENOENT;
 			break;
 		}
 
@@ -151,45 +154,58 @@ static int store_record_next_in_sector(struct storage_area_record *record,
 			break;
 		}
 
-		size_t rsize = (size_t)sys_get_le16(&buf[2]);
+		if (header[0] == SAS_FILLVAL) {
+			record->loc = rdpos;
+			record->size = 0U;
+			break;
+		}
+
+		size_t rsize = (size_t)sys_get_le16(&header[2]);
 		size_t avail =
 			store->sector_size - rdpos - SAS_CRCSIZE - SAS_HDRSIZE;
 		bool size_ok = ((rsize > 0U) && (rsize < avail));
 
 		if (record->sector > data->sector) {
-			buf[1]++;
+			header[1]++;
 		}
 
 		if (!wrapcheck) {
-			buf[1] = data->wrapcnt;
+			header[1] = data->wrapcnt;
 		}
 
-		if ((size_ok) && (!crc_ok)) {
-			record->loc = rdpos;
-			record->size = rsize;
-			crc_ok = store_record_valid(record);
+		if ((header[0] == SAS_MAGIC) && (header[1] == data->wrapcnt) &&
+		    (size_ok)) {
+			found = true;
 		}
 
-		if ((buf[0] == SAS_MAGIC) && (buf[1] == data->wrapcnt) &&
-		    (size_ok) && (crc_ok)) {
-			record->loc = rdpos;
-			record->size = rsize;
-			rc = 0;
-			break;
+		if ((found) && (check_crc)) {
+			const struct storage_area_record trecord = {
+				.store = record->store,
+				.sector = record->sector,
+				.loc = rdpos,
+				.size = rsize,
+			};
+
+			found = store_record_valid(&trecord);
 		}
 
-		if (!recover) {
-			rc = -ENOENT;
-			break;
+		if (!found) {
+			check_crc = true;
+			record->size = 0U;
+			record->loc += area->write_size;
+			continue;
 		}
 
-		crc_ok = false;
-		record->loc += area->write_size;
-		record->size = 0U;
+		record->loc = rdpos;
+		record->size = rsize;
 	}
 
-	if ((rc != 0) && (rc != -ENOENT)) {
+	if (rc != 0) {
 		LOG_DBG("Bad read occurred");
+	}
+
+	if (!found) {
+		rc = -ENOENT;
 	}
 
 	return rc;
@@ -204,7 +220,9 @@ static int store_add_cookie(const struct storage_area_store *store)
 
 	const sa_off_t wroff = store->data->sector * store->sector_size;
 	const size_t cksize = store->sector_cookie_size;
-	uint8_t fill[SAS_ALIGNUP(cksize, store->area->write_size) - cksize];
+	const size_t align = store->area->write_size;
+	const size_t flen = SAS_ALIGNUP(cksize, align) - cksize;
+	uint8_t fill[align];
 	struct storage_area_iovec wr[2] = {
 		{
 			.data = store->sector_cookie,
@@ -212,18 +230,18 @@ static int store_add_cookie(const struct storage_area_store *store)
 		},
 		{
 			.data = fill,
-			.len = sizeof(fill),
+			.len = flen,
 		},
 	};
 	int rc;
 
-	memset(fill, SAS_FILLVALUE, sizeof(fill));
+	memset(fill, SAS_FILLVAL, sizeof(fill));
 	rc = storage_area_writev(store->area, wroff, wr, 2U);
 	if (rc != 0) {
 		goto end;
 	}
 
-	store->data->loc = cksize + sizeof(fill);
+	store->data->loc = cksize + flen;
 end:
 	if (rc != 0) {
 		LOG_DBG("add cookie failed for sector %x", store->data->sector);
@@ -255,7 +273,7 @@ static int store_fill_sector(const struct storage_area_store *store)
 	};
 	int rc = 0;
 
-	memset(buf, SAS_FILLVALUE, sizeof(buf));
+	memset(buf, SAS_FILLVAL, sizeof(buf));
 	while (data->loc < store->sector_size) {
 		sa_off_t wroff = secpos + data->loc;
 
@@ -298,49 +316,10 @@ end:
 	return rc;
 }
 
-static int store_advance_scb(const struct storage_area_store *store,
-			     const struct storage_area_store_compact_cb *cb)
-{
-	ARG_UNUSED(cb);
-
-	const struct storage_area *area = store->area;
-	struct storage_area_store_data *data = store->data;
-	int rc = 0;
-
-	if (STORAGE_AREA_FOVRWRITE(area)) {
-		rc = store_fill_sector(store);
-		if (rc != 0) {
-			goto end;
-		}
-	}
-
-	sector_advance(store, &data->sector, 1U);
-	if (data->sector == 0U) {
-		data->wrapcnt++;
-	}
-
-	data->loc = 0U;
-
-	if ((!STORAGE_AREA_FOVRWRITE(area)) &&
-	    (!STORAGE_AREA_AUTOERASE(area))) {
-		rc = store_erase_block(store);
-		if (rc != 0) {
-			goto end;
-		}
-	}
-
-	rc = store_add_cookie(store);
-end:
-	return rc;
-}
-
 static int store_move_record(struct storage_area_record *record,
 			     const struct storage_area_store_compact_cb *cb)
 {
-	const struct storage_area_store *store = record->store;
-	struct storage_area_store_data *data = store->data;
-
-	if ((cb->move == NULL) || (!cb->move(record))) {
+	if ((cb == NULL) || (cb->move == NULL) || (!cb->move(record))) {
 		return 0;
 	}
 
@@ -349,11 +328,13 @@ static int store_move_record(struct storage_area_record *record,
 		return 0;
 	}
 
+	const struct storage_area_store *store = record->store;
+	struct storage_area_store_data *data = store->data;
 	const struct storage_area *area = store->area;
 	const size_t sector_size = store->sector_size;
 	const size_t align = area->write_size;
 	const struct storage_area_record dest = {
-		.store = (struct storage_area_store *)store,
+		.store = record->store,
 		.sector = data->sector,
 		.loc = data->loc,
 		.size = record->size};
@@ -409,11 +390,49 @@ end:
 	return rc;
 }
 
-static int store_advance_pcb(const struct storage_area_store *store,
-			     const struct storage_area_store_compact_cb *cb)
+/* store advance for circular buffer without persistence (no records copy) */
+static int store_advance_simple(const struct storage_area_store *store,
+				const struct storage_area_store_compact_cb *cb)
+{
+	ARG_UNUSED(cb);
+
+	const struct storage_area *area = store->area;
+	struct storage_area_store_data *data = store->data;
+	int rc = 0;
+
+	if (STORAGE_AREA_FOVRWRITE(area)) {
+		rc = store_fill_sector(store);
+		if (rc != 0) {
+			goto end;
+		}
+	}
+
+	sector_advance(store, &data->sector, 1U);
+	if (data->sector == 0U) {
+		data->wrapcnt++;
+	}
+
+	data->loc = 0U;
+
+	if ((!STORAGE_AREA_FOVRWRITE(area)) &&
+	    (!STORAGE_AREA_AUTOERASE(area))) {
+		rc = store_erase_block(store);
+		if (rc != 0) {
+			goto end;
+		}
+	}
+
+	rc = store_add_cookie(store);
+end:
+	return rc;
+}
+
+/* store advance for circular buffer with persistence (with record copy) */
+static int store_advance(const struct storage_area_store *store,
+			 const struct storage_area_store_compact_cb *cb)
 {
 	const struct storage_area_store_data *data = store->data;
-	int rc = store_advance_scb(store, NULL);
+	int rc = store_advance_simple(store, NULL);
 
 	if ((cb == NULL) || (cb->move == NULL) || (rc != 0)) {
 		goto end;
@@ -436,14 +455,14 @@ static int store_advance_pcb(const struct storage_area_store *store,
 	while (scnt > 0U) {
 		walk.loc = 0U;
 		walk.size = 0U;
-		while (store_record_next_in_sector(&walk, true, true) == 0) {
+		while (store_record_next_in_sector(&walk, true) == 0) {
 			while (true) {
 				rc = store_move_record(&walk, cb);
 				if ((rc == 0) || (rc != -ENOSPC)) {
 					break;
 				}
 
-				rc = store_advance_scb(store, NULL);
+				rc = store_advance_simple(store, NULL);
 				if (rc != 0) {
 					break;
 				}
@@ -511,7 +530,8 @@ static int store_recover(const struct storage_area_store *store,
 		store_reverse(store);
 		rscnt++;
 		if (loop != 0U) {
-			rc = store_advance_pcb(store, cb);
+			/* some data was not moved, restart the move */
+			rc = store_advance(store, cb);
 			break;
 		}
 
@@ -526,8 +546,7 @@ static int store_recover(const struct storage_area_store *store,
 		for (size_t cnt = 0U; cnt < erase_size / sec_size; cnt++) {
 			walk.loc = 0U;
 			walk.size = 0U;
-			while (store_record_next_in_sector(&walk, true, true) ==
-			       0) {
+			while (store_record_next_in_sector(&walk, true) == 0) {
 				if ((cb->move(&walk)) &&
 				    (store_record_valid(&walk))) {
 					mrcnt++;
@@ -553,9 +572,7 @@ static int store_recover(const struct storage_area_store *store,
 		for (size_t cnt = 0U; cnt < rscnt; cnt++) {
 			walk.loc = 0U;
 			walk.size = 0U;
-			/* walk without recovery */
-			while (store_record_next_in_sector(&walk, true, false) ==
-			       0) {
+			while (store_record_next_in_sector(&walk, true) == 0) {
 				if (store_record_valid(&walk)) {
 					vrcnt++;
 				}
@@ -565,6 +582,7 @@ static int store_recover(const struct storage_area_store *store,
 		}
 
 		if (vrcnt >= mrcnt) {
+			/* all records were moved */
 			break;
 		}
 	}
@@ -588,6 +606,11 @@ static int store_writev(const struct storage_area_store *store,
 			const struct storage_area_iovec *iovec, size_t iovcnt)
 {
 	struct storage_area_store_data *data = store->data;
+
+	if (data->advance == NULL) {
+		return -ENOTSUP;
+	}
+
 	const size_t len =
 		SAS_HDRSIZE + store_iovec_size(iovec, iovcnt) + SAS_CRCSIZE;
 
@@ -597,18 +620,19 @@ static int store_writev(const struct storage_area_store *store,
 
 	const struct storage_area *area = store->area;
 	const size_t secpos = data->sector * store->sector_size;
+	const uint8_t erasevalue = STORAGE_AREA_ERASEVALUE(area);
 	struct storage_area_iovec wr[iovcnt + 2];
-	uint8_t hbuf[SAS_HDRSIZE];
+	uint8_t header[SAS_HDRSIZE];
 	uint8_t cbuf[SAS_CRCSIZE + SAS_ALIGNUP(len, area->write_size) - len];
 	uint32_t crc = SAS_CRCINIT;
 	size_t crc_skip = store->crc_skip;
 	int rc;
 
-	hbuf[0] = SAS_MAGIC;
-	hbuf[1] = data->wrapcnt;
-	sys_put_le16((uint16_t)store_iovec_size(iovec, iovcnt), &hbuf[2]);
-	wr[0].data = hbuf;
-	wr[0].len = sizeof(hbuf);
+	header[0] = SAS_MAGIC;
+	header[1] = data->wrapcnt;
+	sys_put_le16((uint16_t)store_iovec_size(iovec, iovcnt), &header[2]);
+	wr[0].data = header;
+	wr[0].len = sizeof(header);
 	wr[iovcnt + 1].data = cbuf;
 	wr[iovcnt + 1].len = sizeof(cbuf);
 
@@ -629,7 +653,7 @@ static int store_writev(const struct storage_area_store *store,
 	}
 
 	sys_put_le32(crc, cbuf);
-	memset(&cbuf[SAS_CRCSIZE], SAS_FILLVALUE, sizeof(cbuf) - SAS_CRCSIZE);
+	memset(&cbuf[SAS_CRCSIZE], erasevalue, sizeof(cbuf) - SAS_CRCSIZE);
 	while (true) {
 		sa_off_t wroff = secpos + data->loc;
 
@@ -668,43 +692,38 @@ static bool store_ready(const struct storage_area_store *store)
 	return true;
 }
 
-static int store_mount_basic(const struct storage_area_store *store,
-			     const struct storage_area_store_compact_cb *cb)
+static bool store_config_valid(const struct storage_area_store *store)
 {
-	ARG_UNUSED(cb);
-
-	if ((!store_valid(store)) || (store_init_semaphore(store) != 0)) {
-		return -EINVAL;
-	}
-
-	if (store->data->ready) {
-		return -EALREADY;
-	}
-
-	struct storage_area_store_data *data = store->data;
 	const struct storage_area *area = store->area;
 	const size_t sa_size = area->erase_size * area->erase_blocks;
 	const size_t st_size = store->sector_size * store->sector_cnt;
 
 	if ((store->sector_size & (area->write_size - 1)) != 0U) {
 		LOG_DBG("Sector size not a multiple of write block size");
-		return -EINVAL;
+		return false;
 	}
 
 	if (((area->erase_size & (store->sector_size - 1)) != 0U) &&
 	    ((store->sector_size & (area->erase_size - 1)) != 0U)) {
 		LOG_DBG("Sector incorrectly sized");
-		return -EINVAL;
+		return false;
 	}
 
 	if (sa_size < st_size) {
 		LOG_DBG("Store does not fit area");
-		return -EINVAL;
+		return false;
 	}
 
-	(void)store_take_semaphore(store);
+	return true;
+}
+
+static int store_init(const struct storage_area_store *store)
+{
+	const struct storage_area *area = store->area;
+	struct storage_area_store_data *data = store->data;
 	struct storage_area_record record = {
 		.store = (struct storage_area_store *)store,
+		.size = 0U,
 	};
 	uint8_t rd_wrapcnt;
 	struct storage_area_iovec rd = {
@@ -719,7 +738,7 @@ static int store_mount_basic(const struct storage_area_store *store,
 		record.sector = i;
 		record.loc = 0U;
 
-		if (store_record_next_in_sector(&record, false, false) != 0) {
+		if (store_record_next_in_sector(&record, false) != 0) {
 			continue;
 		}
 
@@ -741,6 +760,7 @@ static int store_mount_basic(const struct storage_area_store *store,
 	}
 
 	if (data->sector == store->sector_cnt) {
+		data->sector--;
 		goto end;
 	}
 
@@ -749,7 +769,7 @@ static int store_mount_basic(const struct storage_area_store *store,
 	record.sector = data->sector;
 	record.loc = 0U;
 	record.size = 0U;
-	while (store_record_next_in_sector(&record, true, true) == 0) {
+	while (store_record_next_in_sector(&record, true) == 0) {
 		loc = record.loc +
 		      SAS_ALIGNUP(SAS_HDRSIZE + record.size + SAS_CRCSIZE,
 				  area->write_size);
@@ -758,88 +778,151 @@ static int store_mount_basic(const struct storage_area_store *store,
 	data->loc = loc;
 	data->ready = true;
 end:
-	store_give_semaphore(store);
 	return 0;
 }
 
-static int store_mount_scb(const struct storage_area_store *store,
-			   const struct storage_area_store_compact_cb *cb)
+int storage_area_store_mount_ro(const struct storage_area_store *store)
 {
-	ARG_UNUSED(cb);
-
-	if (store->api->advance == NULL) {
+	if ((!store_valid(store)) || (!store_config_valid(store))) {
 		return -EINVAL;
 	}
 
-	int rc = store_mount_basic(store, NULL);
-	struct storage_area_store_data *data = store->data;
+	if (store->data->ready) {
+		return -EALREADY;
+	}
 
-	if ((rc != 0) || (data->ready)) {
-		goto end;
+	int rc = store_init_semaphore(store);
+
+	if (rc != 0) {
+		return rc;
 	}
 
 	(void)store_take_semaphore(store);
-	data->sector--;
-	rc = store->api->advance(store, NULL);
-	if (rc == 0) {
-		data->ready = true;
+	rc = store_init(store);
+	if (rc != 0) {
+		goto end;
 	}
 
-	store_give_semaphore(store);
+	store->data->advance = NULL;
+	store->data->ready = true;
 end:
+	store_give_semaphore(store);
 	return rc;
 }
 
-static int store_mount_pcb(const struct storage_area_store *store,
-			   const struct storage_area_store_compact_cb *cb)
+int storage_area_store_mount_cb(const struct storage_area_store *store)
 {
-	const struct storage_area *area = store->area;
-
-	if ((cb != NULL) && (cb->move != NULL) &&
-	    ((store->spare_sectors * store->sector_size) < area->erase_size)) {
-		LOG_DBG("Not enough spare sectors");
+	if ((!store_valid(store)) || (!store_config_valid(store))) {
 		return -EINVAL;
 	}
 
-	struct storage_area_store_data *data = store->data;
-	int rc = store_mount_basic(store, NULL);
+	if (store->data->ready) {
+		return -EALREADY;
+	}
+
+	int rc = store_init_semaphore(store);
+
+	if (rc != 0) {
+		return rc;
+	}
+
+	(void)store_take_semaphore(store);
+	rc = store_init(store);
+	if (rc != 0) {
+		goto end;
+	}
+
+	if (!store->data->ready) {
+		rc = store_advance_simple(store, NULL);
+	}
 
 	if (rc != 0) {
 		goto end;
 	}
 
-	(void)store_take_semaphore(store);
-	if (data->ready) {
-		data->ready = false;
-		rc = store_recover(store, cb);
-	} else {
-		data->sector--;
-		rc = store->api->advance(store, NULL);
-	}
-
-	if (rc == 0) {
-		data->ready = true;
-	}
-
-	store_give_semaphore(store);
+	store->data->advance = store_advance_simple;
+	store->data->ready = true;
 end:
+	store_give_semaphore(store);
 	return rc;
+}
+
+int storage_area_store_mount(const struct storage_area_store *store,
+			     const struct storage_area_store_compact_cb *cb)
+{
+	if ((!store_valid(store)) || (!store_config_valid(store))) {
+		return -EINVAL;
+	}
+
+	const size_t spsize = store->spare_sectors * store->sector_size;
+
+	if ((cb != NULL) && (cb->move != NULL) &&
+	    (spsize < store->area->erase_size)) {
+		LOG_DBG("Not enough spare sectors");
+		return -EINVAL;
+	}
+
+	if (store->data->ready) {
+		return -EALREADY;
+	}
+
+	int rc = store_init_semaphore(store);
+
+	if (rc != 0) {
+		return rc;
+	}
+
+	(void)store_take_semaphore(store);
+	rc = store_init(store);
+	if (rc != 0) {
+		goto end;
+	}
+
+	if (!store->data->ready) {
+		rc = store_advance_simple(store, NULL);
+	} else {
+		rc = store_recover(store, cb);
+	}
+
+	if (rc != 0) {
+		goto end;
+	}
+
+	store->data->advance = store_advance;
+	store->data->ready = true;
+end:
+	store_give_semaphore(store);
+	return rc;
+}
+
+int storage_area_store_unmount(const struct storage_area_store *store)
+{
+	if (!store_valid(store)) {
+		return -EINVAL;
+	}
+
+	if (store->data->ready) {
+		store->data->advance = NULL;
+		store->data->ready = false;
+	}
+
+	return 0;
 }
 
 int storage_area_store_advance(const struct storage_area_store *store)
 {
-	if (store->api->advance == NULL) {
-		return -ENOTSUP;
-	}
-
 	if (!store_ready(store)) {
 		return -EINVAL;
+	}
+
+	if (store->data->advance == NULL) {
+		return -ENOTSUP;
 	}
 
 	int rc;
 
 	(void)store_take_semaphore(store);
-	rc = store->api->advance(store, NULL);
+	rc = store->data->advance(store, NULL);
 	store_give_semaphore(store);
 	return rc;
 }
@@ -847,18 +930,18 @@ int storage_area_store_advance(const struct storage_area_store *store)
 int storage_area_store_compact(const struct storage_area_store *store,
 			       const struct storage_area_store_compact_cb *cb)
 {
-	if (store->api->advance == NULL) {
-		return -ENOTSUP;
-	}
-
 	if (!store_ready(store)) {
 		return -EINVAL;
+	}
+
+	if (store->data->advance == NULL) {
+		return -ENOTSUP;
 	}
 
 	int rc;
 
 	(void)store_take_semaphore(store);
-	rc = store->api->advance(store, cb);
+	rc = store->data->advance(store, cb);
 	store_give_semaphore(store);
 	return rc;
 }
@@ -876,10 +959,6 @@ int storage_area_store_writev(const struct storage_area_store *store,
 			      const struct storage_area_iovec *iovec,
 			      size_t iovcnt)
 {
-	if (store->api->writev == NULL) {
-		return -ENOTSUP;
-	}
-
 	if (!store_ready(store)) {
 		return -EINVAL;
 	}
@@ -887,7 +966,7 @@ int storage_area_store_writev(const struct storage_area_store *store,
 	int rc;
 
 	(void)store_take_semaphore(store);
-	rc = store->api->writev(store, iovec, iovcnt);
+	rc = store_writev(store, iovec, iovcnt);
 	store_give_semaphore(store);
 	return rc;
 }
@@ -923,7 +1002,7 @@ int storage_area_record_next(const struct storage_area_store *store,
 	int rc = 0;
 
 	while (true) {
-		rc = store_record_next_in_sector(record, true, true);
+		rc = store_record_next_in_sector(record, true);
 		if (rc != -ENOENT) {
 			break;
 		}
@@ -1038,35 +1117,8 @@ int storage_area_store_get_sector_cookie(const struct storage_area_store *store,
 	return store_get_sector_cookie(store, sector, cookie, cksz);
 }
 
-int storage_area_store_mount(const struct storage_area_store *store,
-			     const struct storage_area_store_compact_cb *cb)
-{
-	if (store->api->mount == NULL) {
-		return -EINVAL;
-	}
-
-	return store->api->mount(store, cb);
-}
-
-int storage_area_store_unmount(const struct storage_area_store *store)
-{
-	if (!store_valid(store)) {
-		return -EINVAL;
-	}
-
-	if (store->data->ready) {
-		store->data->ready = false;
-	}
-
-	return 0;
-}
-
 int storage_area_store_wipe(const struct storage_area_store *store)
 {
-	if (store->api->writev == NULL) {
-		return -ENOTSUP;
-	}
-
 	if (!store_valid(store)) {
 		return -EINVAL;
 	}
@@ -1075,23 +1127,29 @@ int storage_area_store_wipe(const struct storage_area_store *store)
 		return -EINVAL;
 	}
 
-	return storage_area_erase(store->area, 0, store->area->erase_blocks);
+	const struct storage_area *area = store->area;
+	uint8_t wbuf[area->write_size];
+	const struct storage_area_iovec wr = {
+		.data = wbuf,
+		.len = sizeof(wbuf)
+	};
+	sa_off_t wroff = 0;
+	int rc;
+
+	rc = storage_area_erase(area, 0, area->erase_blocks);
+
+	if (rc != 0) {
+		goto end;
+	}
+
+	while (wroff < (area->erase_size * area->erase_blocks)) {
+		rc = storage_area_writev(area, wroff, &wr, 1U);
+		if (rc != 0) {
+			break;
+		}
+
+		wroff += sizeof(wbuf);
+	}
+end:
+	return rc;
 }
-
-const struct storage_area_store_api storage_area_store_ro_api = {
-	.writev = NULL,
-	.advance = NULL,
-	.mount = store_mount_basic,
-};
-
-const struct storage_area_store_api storage_area_store_scb_api = {
-	.writev = store_writev,
-	.advance = store_advance_scb,
-	.mount = store_mount_scb,
-};
-
-const struct storage_area_store_api storage_area_store_pcb_api = {
-	.writev = store_writev,
-	.advance = store_advance_pcb,
-	.mount = store_mount_pcb,
-};

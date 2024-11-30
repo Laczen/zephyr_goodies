@@ -24,7 +24,7 @@ LOG_MODULE_REGISTER(sas_test);
 #define FLASH_AREA_XIP		FLASH_AREA_OFFSET +				\
 	DT_REG_ADDR(DT_MTD_FROM_FIXED_PARTITION(FLASH_AREA_NODE))
 #define AREA_SIZE		DT_REG_SIZE(FLASH_AREA_NODE)
-#define AREA_ERASE_SIZE		4096
+#define AREA_ERASE_SIZE		8192
 #define AREA_WRITE_SIZE		8
 
 STORAGE_AREA_FLASH_RW_DEFINE(test, FLASH_AREA_DEVICE, FLASH_AREA_OFFSET,
@@ -147,9 +147,9 @@ const struct storage_area_store_compact_cb compact_cb = {
 };
 
 #define SECTOR_SIZE 4096
-STORAGE_AREA_STORE_PCB_DEFINE(test, GET_STORAGE_AREA(test), (void *)cookie,
-			      sizeof(cookie), SECTOR_SIZE, AREA_SIZE / SECTOR_SIZE,
-			      AREA_ERASE_SIZE / SECTOR_SIZE, 0U);
+STORAGE_AREA_STORE_DEFINE(test, GET_STORAGE_AREA(test), (void *)cookie,
+			  sizeof(cookie), SECTOR_SIZE, AREA_SIZE / SECTOR_SIZE,
+			  AREA_ERASE_SIZE / SECTOR_SIZE, 0U);
 
 static void *storage_area_store_api_setup(void)
 {
@@ -160,9 +160,9 @@ static void storage_area_store_api_before(void *fixture)
 {
 	ARG_UNUSED(fixture);
 
-	int rc = storage_area_erase(GET_STORAGE_AREA(test), 0, 1);
+	int rc = storage_area_store_wipe(GET_STORAGE_AREA_STORE(test));
 
-	zassert_ok(rc, "erase returned [%d]", rc);
+	zassert_ok(rc, "wipe returned [%d]", rc);
 }
 
 void storage_area_store_report_state(char *tag,
@@ -333,6 +333,64 @@ ZTEST_USER(storage_area_store_api, test_store)
 	rc = read_data(store, "data2", &rvalue);
 	zassert_ok(rc, "read returned [%d]", rc);
 	zassert_equal(rvalue, wvalue3, "bad data read");
+}
+
+STORAGE_AREA_STORE_DEFINE(testupdate, GET_STORAGE_AREA(test), (void *)cookie,
+			  sizeof(cookie), SECTOR_SIZE, AREA_SIZE / SECTOR_SIZE,
+			  AREA_ERASE_SIZE / SECTOR_SIZE, 1U);
+
+ZTEST_USER(storage_area_store_api, test_record_update)
+{
+	struct storage_area_store *store = GET_STORAGE_AREA_STORE(testupdate);
+
+	if ((!STORAGE_AREA_FOVRWRITE(store->area)) &&
+	    (!STORAGE_AREA_LOVRWRITE(store->area))) {
+		/* record update not supported */
+		return;
+	}
+
+	struct storage_area_record walk;
+	uint8_t status;
+	uint32_t value;
+	struct storage_area_iovec wr[] = {
+		{
+			.data = &status,
+			.len = sizeof(status),
+		},
+		{
+			.data = &value,
+			.len = sizeof(value),
+		},
+	};
+	uint8_t rdstatus;
+	int rc;
+
+	rc = storage_area_store_mount(store, NULL);
+	zassert_ok(rc, "mount returned [%d]", rc);
+	storage_area_store_report_state("Mount", store);
+
+	status = 0xff;
+	value = 0xdeadbeef;
+	rc = storage_area_store_writev(store, wr, ARRAY_SIZE(wr));
+	zassert_ok(rc, "write returned [%d]", rc);
+	storage_area_store_report_state("write", store);
+
+	walk.store = NULL;
+	rc = storage_area_record_next(store, &walk);
+	zassert_ok(rc, "retrieve record failed [%d]", rc);
+	zassert_equal(walk.size, sizeof(status) + sizeof(value), "wrong record");
+	zassert_true(storage_area_record_valid(&walk), "bad record");
+	rc = storage_area_record_read(&walk, 0, &rdstatus, sizeof(rdstatus));
+	zassert_ok(rc, "read from record failed [%d]", rc);
+	zassert_equal(status, rdstatus, "bad status");
+
+	status = 0x0;
+	rc = storage_area_record_update(&walk, &status, sizeof(status));
+	zassert_ok(rc, "record update failed [%d]", rc);
+	zassert_true(storage_area_record_valid(&walk), "bad record");
+	rc = storage_area_record_read(&walk, 0, &rdstatus, sizeof(rdstatus));
+	zassert_ok(rc, "read from record failed [%d]", rc);
+	zassert_equal(status, rdstatus, "bad status");
 }
 
 ZTEST_SUITE(storage_area_store_api, NULL, storage_area_store_api_setup,
